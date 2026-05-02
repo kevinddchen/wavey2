@@ -333,6 +333,11 @@ function setTimeCursor(tIdx) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+const HEATMAP_OPACITY = 0.75;
+const ARROW_STEP = 8;
+const ARROW_OPACITY = 0.5;
+const MARKER_RADIUS = 8;
+
 async function init() {
     const data = await loadData();
     const { times, grid } = data.metadata;
@@ -359,14 +364,19 @@ async function init() {
         [grid.lat_max, grid.lon_max],
     ];
     const heatLayer = L.imageOverlay("", mapBounds, {
-        opacity: 0.65,
+        opacity: HEATMAP_OPACITY,
         interactive: false,
     }).addTo(map);
 
-    // Wave-direction arrow overlay
+    // Wave-direction arrow overlay — appended to a custom Leaflet pane so its
+    // z-index (450) competes inside leaflet-map-pane's stacking context,
+    // keeping it below marker-pane (600) rather than above all panes.
+    const arrowPane = map.createPane("arrowPane");
+    arrowPane.style.zIndex = 450;
+    arrowPane.style.pointerEvents = "none";
     const arrowCanvas = document.createElement("canvas");
-    arrowCanvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;z-index:500";
-    map.getContainer().appendChild(arrowCanvas);
+    arrowCanvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none";
+    arrowPane.appendChild(arrowCanvas);
 
     function sizeArrowCanvas() {
         const c = map.getContainer();
@@ -385,7 +395,7 @@ async function init() {
         ctx.lineTo(0, 0);
         ctx.lineTo(-len * 0.35, len * 0.3);
         ctx.closePath();
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillStyle = `rgba(0,0,0,${ARROW_OPACITY})`;
         ctx.fill();
         ctx.restore();
     }
@@ -396,7 +406,7 @@ async function init() {
         const actx = arrowCanvas.getContext("2d");
         actx.clearRect(0, 0, arrowCanvas.width, arrowCanvas.height);
         const { nx, ny, lat_min, lat_max, lon_min, lon_max } = grid;
-        const step = 4;
+        const step = ARROW_STEP;
         for (let gy = 0; gy < ny; gy += step) {
             for (let gx = 0; gx < nx; gx += step) {
                 const dir = data.wave_dir[gy * nx + gx]?.[i];
@@ -477,11 +487,12 @@ async function init() {
 
         if (!marker) {
             marker = L.circleMarker([pt.lat, pt.lng], {
-                radius: 7,
+                radius: MARKER_RADIUS,
                 color: "#fff",
                 fillColor: "#ffd700",
                 fillOpacity: 1,
                 weight: 2,
+                pane: "markerPane",
             }).addTo(map);
         } else {
             marker.setLatLng([pt.lat, pt.lng]);
