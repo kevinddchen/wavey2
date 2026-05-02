@@ -133,7 +133,7 @@ const TICK_COLOR = "#527090";
 // Plugin: yellow dashed vertical line at current time
 Chart.register({
     id: "timeCursor",
-    afterDraw(chart) {
+    afterDatasetsDraw(chart) {
         const idx = chart._currentIdx;
         if (idx == null || !chart.scales.x) return;
         const x = chart.scales.x.getPixelForValue(idx);
