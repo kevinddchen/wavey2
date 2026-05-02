@@ -299,6 +299,8 @@ const HEATMAP_OPACITY = 0.75;
 const ARROW_STEP = 8;
 const ARROW_OPACITY = 0.5;
 const MARKER_RADIUS = 8;
+const START_MARKER_LAT = 36.6113; // Coordinates for Breakwater cove, i.e. San Carlos beach
+const START_MARKER_LNG = -121.891;
 
 async function init() {
     const data = await loadData();
@@ -450,7 +452,7 @@ async function init() {
     let marker = null;
     let selectedIdx = null;
 
-    map.on("click", ({ latlng: { lat, lng } }) => {
+    function selectPoint(lat, lng) {
         const pt = nearestPoint(grid, lat, lng);
 
         if (!marker) {
@@ -473,7 +475,11 @@ async function init() {
 
         selectedIdx = pt.idx;
         updateCharts(data, selectedIdx, tIdx);
-    });
+    }
+
+    map.on("click", ({ latlng: { lat, lng } }) => selectPoint(lat, lng));
+
+    selectPoint(START_MARKER_LAT, START_MARKER_LNG);
 }
 
 document.addEventListener("DOMContentLoaded", init);
