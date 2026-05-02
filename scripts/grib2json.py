@@ -6,17 +6,9 @@ Quick start
   # 1. List what variables are in the file
   python grib2json.py mtr_nwps_CG3_20260430_1200.grib2 --list
 
-  # 2. Convert using auto-detected variable names
+  # 2. Convert
   python grib2json.py mtr_nwps_CG3_20260430_1200.grib2
 
-  # 3. Override variable names if auto-detection fails
-  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2 \
-      --wave-height swh --wave-dir mwd --water-level ssh
-
-Requirements
-------------
-  pip install pygrib numpy
-  brew install eccodes          # macOS
 """
 
 import argparse
@@ -26,11 +18,11 @@ from pathlib import Path
 
 import numpy as np
 
-# ── Variable shortName candidates (tried in order) ───────────────────────────
+# ── Variable shortNames ───────────────────────────────────────────────────────
 
-HEIGHT_NAMES = ['swh', 'htsgw', 'shww', 'wvhgt']
-DIR_NAMES    = ['mwd', 'dirpw', 'mdts']
-LEVEL_NAMES  = ['ssh', 'zos', 'wlev', 'surge']
+HEIGHT_NAME = 'swh'
+DIR_NAME    = 'dirpw'
+LEVEL_NAME  = 'zos'
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,24 +64,18 @@ def _best_group(groups):
     return sorted(groups[sn], key=lambda m: m['validDate']), sn
 
 
-def load_all_messages(path, h_cands, d_cands, l_cands):
+def load_all_messages(path):
     """Single-pass read; returns (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l)."""
-    h_low = {c.lower() for c in h_cands}
-    d_low = {c.lower() for c in d_cands}
-    l_low = {c.lower() for c in l_cands}
-
-    h_groups, d_groups, l_groups = {}, {}, {}
+    targets = {
+        HEIGHT_NAME.lower(): {},
+        DIR_NAME.lower(): {},
+        LEVEL_NAME.lower(): {},
+    }
 
     grbs = open_file(path)
     for grb in grbs:
         sn = grb.shortName.lower()
-        if sn in h_low:
-            target = h_groups
-        elif sn in d_low:
-            target = d_groups
-        elif sn in l_low:
-            target = l_groups
-        else:
+        if sn not in targets:
             continue
 
         vals = grb.values
@@ -104,10 +90,14 @@ def load_all_messages(path, h_cands, d_cands, l_cands):
             'lats': lats,
             'lons': lons,
         }
-        target.setdefault(sn, []).append(entry)
+        targets[sn].setdefault(sn, []).append(entry)
     grbs.close()
 
-    return _best_group(h_groups), _best_group(d_groups), _best_group(l_groups)
+    return (
+        _best_group(targets[HEIGHT_NAME.lower()]),
+        _best_group(targets[DIR_NAME.lower()]),
+        _best_group(targets[LEVEL_NAME.lower()]),
+    )
 
 
 def extract(msgs):
@@ -170,12 +160,6 @@ def main():
     ap.add_argument('--list', action='store_true', help='List available variables and exit')
     ap.add_argument('--out', default='data/waves.json',
                     help='Output path (default: data/waves.json)')
-    ap.add_argument('--wave-height', metavar='VAR',
-                    help='GRIB2 shortName for wave height')
-    ap.add_argument('--wave-dir', metavar='VAR',
-                    help='GRIB2 shortName for wave direction')
-    ap.add_argument('--water-level', metavar='VAR',
-                    help='GRIB2 shortName for water level / tide')
     ap.add_argument('--round', type=int, default=2, metavar='N',
                     help='Decimal places to round values to (default: 2)')
     ap.add_argument('--step', type=int, default=1, metavar='N',
@@ -190,18 +174,11 @@ def main():
         list_variables(path)
         return
 
-    h_cands = [args.wave_height] if args.wave_height else HEIGHT_NAMES
-    d_cands = [args.wave_dir]    if args.wave_dir    else DIR_NAMES
-    l_cands = [args.water_level] if args.water_level else LEVEL_NAMES
-
     print("Reading GRIB2 messages...")
-    (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l) = load_all_messages(
-        path, h_cands, d_cands, l_cands
-    )
+    (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l) = load_all_messages(path)
 
     if msgs_h is None:
-        print("ERROR: Wave height variable not found. Run --list to see available variables.")
-        print(f"  Tried shortNames: {h_cands}")
+        print(f"ERROR: Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
         sys.exit(1)
 
     print(f"  wave_height  → {sn_h} ({len(msgs_h)} steps)")
