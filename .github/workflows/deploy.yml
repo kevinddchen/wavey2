@@ -42,6 +42,9 @@ jobs:
         run: |
           uv run scripts/download_latest_grib.py --path latest.grib2
           uv run python scripts/grib2json.py latest.grib2
+          mkdir _site
+          cp index.html _site/
+          cp -r css js data _site/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -49,7 +52,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./
+          path: _site/
 
   deploy:
     environment:
