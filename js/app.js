@@ -380,8 +380,13 @@ async function init() {
 
     function sizeArrowCanvas() {
         const c = map.getContainer();
+        const cr = map.getContainer().getBoundingClientRect();
+        const pr = map.getPanes().mapPane.getBoundingClientRect();
+        const pos = { x: pr.left - cr.left, y: pr.top - cr.top };
         arrowCanvas.width = c.clientWidth;
         arrowCanvas.height = c.clientHeight;
+        arrowCanvas.style.left = -pos.x + "px";
+        arrowCanvas.style.top = -pos.y + "px";
     }
 
     function drawArrow(ctx, x, y, deg, len = 10) {
