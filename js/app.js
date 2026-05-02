@@ -52,7 +52,7 @@ function buildHeatmapURL(data, tIdx) {
                 img.data[p + 3] = 0;
                 continue;
             }
-            const [r, g, b] = heightToRGB(h * FEET_PER_METER);
+            const [r, g, b] = heightToRGB(h);
             img.data[p] = r;
             img.data[p + 1] = g;
             img.data[p + 2] = b;
@@ -123,7 +123,7 @@ function generateDemoData() {
             forecast_time: t0.toISOString(),
             times,
             grid: { nx, ny, lat_min, lat_max, lon_min, lon_max },
-            units: { wave_height: "m", wave_dir: "°", water_level: "m" },
+            units: { wave_height: "ft", wave_dir: "degrees", water_level: "ft" },
         },
         wave_height,
         wave_dir,
@@ -141,6 +141,20 @@ async function loadData() {
         return await r.json();
     } catch {
         return generateDemoData();
+    }
+}
+
+function initData(data) {
+    for (const series of data.wave_height) {
+        for (let i = 0; i < series.length; i++)
+            if (series[i] != null) series[i] = +(series[i] * FEET_PER_METER).toFixed(2);
+    }
+    for (const series of data.water_level) {
+        for (let i = 0; i < series.length; i++)
+            if (series[i] != null) series[i] = +(series[i] * FEET_PER_METER).toFixed(2);
+    }
+    for (const series of data.wave_dir) {
+        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = (series[i] + 180) % 360;
     }
 }
 
@@ -236,18 +250,6 @@ function makeChart(id, color, yLabel, yMin, yMax, tickCb) {
     return new Chart(document.getElementById(id), cfg);
 }
 
-const DIR_NAMES = {
-    0: "N",
-    45: "NE",
-    90: "E",
-    135: "SE",
-    180: "S",
-    225: "SW",
-    270: "W",
-    315: "NW",
-    360: "N",
-};
-
 let charts = {};
 
 function initCharts(times) {
@@ -268,10 +270,8 @@ function initCharts(times) {
     });
 
     charts.height = makeChart("chart-height", "#4a9eda", "ft", 0, null, null);
-    charts.dir = makeChart("chart-dir", "#e07a5f", "°", 0, 360, (v) =>
-        v % 45 === 0 ? `${DIR_NAMES[v] || ""} ${v}°` : null,
-    );
-    charts.tide = makeChart("chart-tide", "#6bc49a", "m", null, null, null);
+    charts.dir = makeChart("chart-dir", "#e07a5f", "degrees", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
+    charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
@@ -315,9 +315,7 @@ function initCharts(times) {
 }
 
 function updateCharts(data, gridIdx, tIdx) {
-    charts.height.data.datasets[0].data = (data.wave_height[gridIdx] || []).map((v) =>
-        v != null ? +(v * FEET_PER_METER).toFixed(2) : null,
-    );
+    charts.height.data.datasets[0].data = data.wave_height[gridIdx] || [];
     charts.dir.data.datasets[0].data = data.wave_dir[gridIdx] || [];
     charts.tide.data.datasets[0].data = (data.water_level || [])[gridIdx] || [];
     Object.values(charts).forEach((c) => {
@@ -339,6 +337,9 @@ async function init() {
     const data = await loadData();
     const { times, grid } = data.metadata;
     const nt = times.length;
+
+    // Initialize data
+    initData(data);
 
     // Status bar
     document.getElementById("status").textContent =
@@ -374,7 +375,7 @@ async function init() {
     }
 
     function drawArrow(ctx, x, y, deg, len = 10) {
-        const rad = ((deg + 180) * Math.PI) / 180;
+        const rad = (deg * Math.PI) / 180;
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(rad);
