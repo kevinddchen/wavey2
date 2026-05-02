@@ -438,7 +438,7 @@ async function init() {
         playing = !playing;
         playBtn.innerHTML = playing ? "&#9646;&#9646;" : "&#9654;";
         if (playing) {
-            timer = setInterval(() => applyTime((tIdx + 1) % nt), 350);
+            timer = setInterval(() => applyTime((tIdx + 1) % nt), 100);
         } else {
             clearInterval(timer);
         }
