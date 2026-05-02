@@ -14,7 +14,7 @@ body {
 
 #app {
     display: grid;
-    grid-template-columns: 1fr 360px;
+    grid-template-columns: 1fr clamp(360px, 35%, 480px);
     height: 100vh;
 }
 
@@ -180,7 +180,7 @@ body {
 }
 
 .chart-container canvas {
-    max-height: 130px;
+    max-height: 160px;
 }
 
 /* ── Responsive ── */
