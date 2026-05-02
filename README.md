@@ -1,6 +1,10 @@
 # Monterey Bay Dive Conditions
 
+> **Disclaimer:** This project was vibe-coded with Claude.
+
 A static webpage that visualizes scuba diving conditions (wave height, wave direction, water level) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
+
+This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of the project.
 
 ## Features
 
@@ -44,28 +48,22 @@ wavey2/
 
 Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 
-## Generating data from a new GRIB2 file
+## Generating data from GRIB2 file
 
 ### Requirements
 
 ```bash
 uv venv
-uv pip install pygrib numpy
+uv sync --no-dev
 ```
 
-`pygrib` requires the `eccodes` C library. On macOS install it via Homebrew if not already present:
+### Download latest GRIB2 file
 
 ```bash
-brew install eccodes
+uv run python scripts/download_latest_grib.py
 ```
 
-### List available variables
-
-```bash
-uv run python scripts/grib2json.py YOUR_FILE.grib2 --list
-```
-
-### Convert
+### Convert data to JSON
 
 ```bash
 uv run python scripts/grib2json.py YOUR_FILE.grib2
@@ -74,8 +72,7 @@ uv run python scripts/grib2json.py YOUR_FILE.grib2
 ## Local development
 
 ```bash
-python3 -m http.server 8042 --directory /path/to/wavey2
-open http://localhost:8042
+uv run python -m http.server 8000 & open http://localhost:8000
 ```
 
 A plain file server is required because the page uses `fetch()` to load `data/waves.json`, which browsers block over `file://` URLs.
@@ -87,3 +84,27 @@ A plain file server is required because the page uses `fetch()` to load `data/wa
 3. The site will be available at `https://<username>.github.io/<repo>/`.
 
 No build step is needed — everything is static HTML, CSS, and JavaScript.
+
+## Developer tools
+
+### Requirements
+
+```bash
+uv venv
+uv sync
+npm install
+```
+
+### Python checks
+
+```bash
+uv run mypy .
+uv run ruff check
+uv run ruff format
+```
+
+### Javascript checks
+
+```bash
+npm run prettier
+```
