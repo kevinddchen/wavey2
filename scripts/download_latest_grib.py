@@ -46,7 +46,7 @@ def get_most_recent_forecast() -> str:
         for time in times:
             if _check_time(date=date, time=time):
                 most_recent_date = date
-                most_recent_time = times[0]
+                most_recent_time = time
                 break
 
         # propagate break out of for-loop above
