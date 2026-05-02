@@ -154,6 +154,20 @@ body {
     color: #8aaccc;
 }
 
+/* ── GitHub link ── */
+
+#github-link {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: #527090;
+    padding: 8px 0 4px;
+    text-decoration: none;
+}
+#github-link:hover {
+    color: #8aaccc;
+}
+
 /* ── Charts ── */
 
 #charts-panel {
