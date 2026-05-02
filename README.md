@@ -1,5 +1,7 @@
 # Monterey Bay Dive Conditions
 
+[_--> live website <--_](https://kevinddchen.github.io/wavey2/)
+
 > **Disclaimer:** This project was vibe-coded with Claude.
 
 A static webpage that visualizes scuba diving conditions (wave height, wave direction, water level) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
