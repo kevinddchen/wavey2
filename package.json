@@ -1,6 +1,7 @@
 {
     "scripts": {
-        "prettier": "prettier --write ."
+        "prettier": "prettier --write .",
+        "prettier:check": "prettier --check ."
     },
     "devDependencies": {
         "prettier": ""
