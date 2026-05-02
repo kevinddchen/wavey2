@@ -15,8 +15,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 # ── Variable shortNames ───────────────────────────────────────────────────────
 
@@ -24,10 +26,16 @@ HEIGHT_NAME = "swh"
 DIR_NAME = "dirpw"
 LEVEL_NAME = "zos"
 
+# ── Types ─────────────────────────────────────────────────────────────────────
+
+Msg = dict[str, Any]
+MsgGroup = dict[str, list[Msg]]
+MsgResult = tuple[list[Msg], str] | tuple[None, None]
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def open_file(path):
+def open_file(path: Path) -> Any:
     try:
         import pygrib
     except ImportError:
@@ -35,14 +43,14 @@ def open_file(path):
     return pygrib.open(str(path))
 
 
-def list_variables(path):
+def list_variables(path: Path) -> None:
     grbs = open_file(path)
-    seen = {}
+    seen: dict[tuple[Any, ...], dict[str, Any]] = {}
     for grb in grbs:
         key = (grb.shortName, grb.name, grb.typeOfLevel, grb.level)
         if key not in seen:
             try:
-                shape = (grb.Nj, grb.Ni)
+                shape: tuple[Any, ...] = (grb.Nj, grb.Ni)
             except AttributeError:
                 shape = (grb.numberOfDataPoints,)
             seen[key] = {"count": 0, "shape": shape}
@@ -59,7 +67,7 @@ def list_variables(path):
     print()
 
 
-def _best_group(groups):
+def _best_group(groups: MsgGroup) -> MsgResult:
     """From a dict of shortName→[msgs], return the list with the most entries."""
     if not groups:
         return None, None
@@ -67,9 +75,9 @@ def _best_group(groups):
     return sorted(groups[sn], key=lambda m: m["validDate"]), sn
 
 
-def load_all_messages(path):
+def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult]:
     """Single-pass read; returns (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l)."""
-    targets = {
+    targets: dict[str, MsgGroup] = {
         HEIGHT_NAME.lower(): {},
         DIR_NAME.lower(): {},
         LEVEL_NAME.lower(): {},
@@ -85,7 +93,7 @@ def load_all_messages(path):
         if hasattr(vals, "filled"):
             vals = vals.filled(np.nan)
         lats, lons = grb.latlons()
-        entry = {
+        entry: Msg = {
             "shortName": grb.shortName,
             "validDate": grb.validDate,
             "analDate": getattr(grb, "analDate", None),
@@ -103,7 +111,9 @@ def load_all_messages(path):
     )
 
 
-def extract(msgs):
+def extract(
+    msgs: list[Msg],
+) -> tuple[list[str], npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any], str | None]:
     """Return (times_iso, lat_1d, lon_1d, values[nt,ny,nx], ref_time_iso)."""
     lats2d = msgs[0]["lats"]
     lons2d = msgs[0]["lons"]
@@ -137,13 +147,13 @@ def extract(msgs):
     return times_iso, lat, lon, data, ref_time_iso
 
 
-def to_grid_list(arr, ndecimals):
+def to_grid_list(arr: npt.NDArray[Any], ndecimals: int) -> list[list[float | None]]:
     """[nt,ny,nx] → list[ny*nx] of list[nt] values; NaN/Inf → null."""
     nt, ny, nx = arr.shape
-    out = []
+    out: list[list[float | None]] = []
     for y in range(ny):
         for x in range(nx):
-            row = []
+            row: list[float | None] = []
             for v in arr[:, y, x]:
                 if np.isnan(v) or np.isinf(v):
                     row.append(None)
@@ -156,7 +166,7 @@ def to_grid_list(arr, ndecimals):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
-def main():
+def main() -> None:
     # fmt: off
     ap = argparse.ArgumentParser(
         description="Convert NWPS GRIB2 → waves.json for the dive conditions viewer.",
@@ -190,8 +200,14 @@ def main():
         sys.exit(1)
 
     print(f"  wave_height  → {sn_h} ({len(msgs_h)} steps)")
-    print(f"  wave_dir     → {sn_d + ' (' + str(len(msgs_d)) + ' steps)' if sn_d else 'NOT FOUND (will be null)'}")
-    print(f"  water_level  → {sn_l + ' (' + str(len(msgs_l)) + ' steps)' if sn_l else 'NOT FOUND (will be null)'}")
+    if sn_d and msgs_d:
+        print(f"  wave_dir     → {sn_d} ({len(msgs_d)} steps)")
+    else:
+        print("  wave_dir     → NOT FOUND (will be null)")
+    if sn_l and msgs_l:
+        print(f"  water_level  → {sn_l} ({len(msgs_l)} steps)")
+    else:
+        print("  water_level  → NOT FOUND (will be null)")
 
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     if args.step > 1:
@@ -212,7 +228,7 @@ def main():
         "lon_max": float(lons[-1]),
     }
 
-    out = {
+    out: dict[str, Any] = {
         "metadata": {
             "source": f"NOAA NWPS – {path.name}",
             "forecast_time": ref_time or times_iso[0],

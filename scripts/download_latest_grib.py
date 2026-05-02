@@ -227,7 +227,7 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
     return file_path
 
 
-def main():
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description="Download the latest Monterey Bay NWPS GRIB2 forecast.")
