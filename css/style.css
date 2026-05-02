@@ -191,12 +191,12 @@ body {
     }
     #app {
         grid-template-columns: 1fr;
-        grid-template-rows: 55vmin 1fr;
+        grid-template-rows: 55vh 1fr;
         height: auto;
         min-height: 100vh;
     }
     #map-panel {
-        height: 55vmin;
+        height: 55vh;
     }
     #sidebar {
         border-left: none;
