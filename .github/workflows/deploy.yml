@@ -1,68 +1,68 @@
 name: Deploy to GitHub Pages
 
 on:
-  schedule:
-    - cron: '0 7,13 * * *'
-  workflow_dispatch:
+    schedule:
+        - cron: "0 7,13 * * *"
+    workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+    contents: read
+    pages: write
+    id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+    group: "pages"
+    cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      UV_NO_DEV: "1"
+    build:
+        runs-on: ubuntu-latest
+        env:
+            UV_NO_DEV: "1"
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
+            - name: Set up Python
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.14"
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/0.11.8/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+            - name: Install uv
+              run: |
+                  curl -LsSf https://astral.sh/uv/0.11.8/install.sh | sh
+                  echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Install Python dependencies
-        run: |
-          uv sync
+            - name: Install Python dependencies
+              run: |
+                  uv sync
 
-      - name: Build site
-        run: |
-          uv run scripts/download_latest_grib.py --path latest.grib2
-          uv run python scripts/grib2json.py latest.grib2
-          mkdir _site
-          cp index.html _site/
-          cp -r css js data _site/
+            - name: Build site
+              run: |
+                  uv run scripts/download_latest_grib.py --path latest.grib2
+                  uv run python scripts/grib2json.py latest.grib2
+                  mkdir _site
+                  cp index.html _site/
+                  cp -r css js data _site/
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
+            - name: Setup Pages
+              uses: actions/configure-pages@v6
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: _site/
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v5
+              with:
+                  path: _site/
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    deploy:
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
 
-    runs-on: ubuntu-latest
-    needs: build
+        runs-on: ubuntu-latest
+        needs: build
 
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v5

@@ -1,53 +1,53 @@
 name: Checks
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+    push:
+        branches: [main]
+    pull_request:
 
 permissions:
-  contents: read
+    contents: read
 
 jobs:
-  python-checks:
-    runs-on: ubuntu-latest
+    python-checks:
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
+            - name: Set up Python
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.14"
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/0.11.8/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+            - name: Install uv
+              run: |
+                  curl -LsSf https://astral.sh/uv/0.11.8/install.sh | sh
+                  echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies
-        run: |
-          uv sync
+            - name: Install dependencies
+              run: |
+                  uv sync
 
-      - name: Run Ruff (lint + format check)
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
+            - name: Run Ruff (lint + format check)
+              run: |
+                  uv run ruff check .
+                  uv run ruff format --check .
 
-      - name: Run Mypy (type check)
-        run: |
-          uv run mypy .
+            - name: Run Mypy (type check)
+              run: |
+                  uv run mypy .
 
-  js-checks:
-    runs-on: ubuntu-latest
+    js-checks:
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
 
-      - name: Install dependencies
-        run: npm install
+            - name: Install dependencies
+              run: npm install
 
-      - name: Run Prettier (format check)
-        run: npm run prettier:check
+            - name: Run Prettier (format check)
+              run: npm run prettier:check
