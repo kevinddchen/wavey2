@@ -1,0 +1,18 @@
+{
+    "name": "wavey2",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Visualizing nearshore wave forecasts for Monterey scuba diving",
+    "scripts": {
+        "prettier": "prettier --check .",
+        "prettier:fix": "prettier --write ."
+    },
+    "devDependencies": {
+        "prettier": ""
+    },
+    "prettier": {
+        "printWidth": 120,
+        "singleQuote": false,
+        "tabWidth": 4
+    }
+}

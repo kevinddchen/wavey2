@@ -7,9 +7,9 @@ A static webpage that visualizes scuba diving conditions (wave height, wave dire
 - Interactive Leaflet map with a wave-height heatmap overlay (blue = calm, red = rough)
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
-  - Wave height (m)
-  - Wave direction (0–360°, with compass labels)
-  - Water level / tide (m)
+    - Wave height (m)
+    - Wave direction (0–360°, with compass labels)
+    - Water level / tide (m)
 - A yellow cursor on the charts tracks the currently selected time step
 
 ## Project structure
