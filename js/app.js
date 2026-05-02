@@ -77,61 +77,6 @@ function nearestPoint(grid, lat, lng) {
     };
 }
 
-// ── Demo data ────────────────────────────────────────────────────────────────
-
-function generateDemoData() {
-    const nx = 38,
-        ny = 38,
-        nt = 49;
-    const lat_min = 36.5,
-        lat_max = 36.88;
-    const lon_min = -122.15,
-        lon_max = -121.75;
-    const t0 = new Date("2026-04-30T12:00:00Z");
-    const times = Array.from({ length: nt }, (_, i) => new Date(t0.getTime() + i * 3.6e6).toISOString());
-
-    const wave_height = [],
-        wave_dir = [],
-        water_level = [];
-    for (let y = 0; y < ny; y++) {
-        for (let x = 0; x < nx; x++) {
-            const exposure = 1 - x / (nx - 1); // west = more exposed
-            const base = 0.5 + 1.5 * exposure;
-            const wh = [],
-                wd = [],
-                wl = [];
-            for (let t = 0; t < nt; t++) {
-                const swell = base + 0.5 * Math.sin((t * Math.PI) / 18);
-                wh.push(+Math.max(0.1, swell + 0.1 * Math.sin(t * 0.7 + x * 0.3)).toFixed(2));
-                wd.push(
-                    Math.round(
-                        (((315 + 20 * Math.sin((t * Math.PI) / 24) + 8 * Math.sin(t * 0.4 + y * 0.2)) % 360) + 360) %
-                            360,
-                    ),
-                );
-                wl.push(+(0.65 * Math.sin((2 * Math.PI * t) / 12.42) + 0.1 * Math.sin((t * Math.PI) / 36)).toFixed(2));
-            }
-            wave_height.push(wh);
-            wave_dir.push(wd);
-            water_level.push(wl);
-        }
-    }
-
-    return {
-        metadata: {
-            source: "Demo (synthetic)",
-            forecast_time: t0.toISOString(),
-            times,
-            grid: { nx, ny, lat_min, lat_max, lon_min, lon_max },
-            units: { wave_height: "ft", wave_dir: "degrees", water_level: "ft" },
-        },
-        wave_height,
-        wave_dir,
-        water_level,
-        _demo: true,
-    };
-}
-
 // ── Data loading ─────────────────────────────────────────────────────────────
 
 async function loadData() {
@@ -140,8 +85,28 @@ async function loadData() {
         if (!r.ok) throw new Error();
         return await r.json();
     } catch {
-        return generateDemoData();
+        return generateEmptyData();
     }
+}
+
+function generateEmptyData() {
+    const nt = 145;
+    const t0 = new Date();
+    const times = Array.from({ length: nt }, (_, i) => new Date(t0.getTime() + i * 3.6e6).toISOString());
+
+    return {
+        metadata: {
+            source: "No data",
+            forecast_time: t0.toISOString(),
+            times,
+            grid: { nx: 90, ny: 178, lat_min: 36.2, lat_max: 37.0, lon_min: -122.2, lon_max: -121.7 },
+            units: { wave_height: "ft", wave_dir: "degrees", water_level: "ft" },
+        },
+        wave_height: [],
+        wave_dir: [],
+        water_level: [],
+        _demo: true,
+    };
 }
 
 function initData(data) {
