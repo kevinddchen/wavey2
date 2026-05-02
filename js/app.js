@@ -1,7 +1,7 @@
 "use strict";
 
 const FEET_PER_METER = 3.28084;
-const MAX_HEIGHT = 12;
+const LOCAL_TIMEZONE = "America/Los_Angeles";
 
 // ── Colour scale (blue → cyan → yellow → red) ────────────────────────────────
 
@@ -34,6 +34,8 @@ function drawLegend() {
 }
 
 // ── Heatmap rendering ────────────────────────────────────────────────────────
+
+const MAX_HEIGHT = 12;
 
 function buildHeatmapURL(data, tIdx) {
     const { nx, ny } = data.metadata.grid;
@@ -223,12 +225,13 @@ function initCharts(times) {
         return (
             d
                 .toLocaleString("en-US", {
+                    weekday: "short",
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
                     hour12: false,
-                    timeZone: "America/Los_Angeles",
+                    timeZone: LOCAL_TIMEZONE,
                 })
                 .replace(",", "") + " PT"
         );
@@ -241,20 +244,14 @@ function initCharts(times) {
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
             if (!items.length) return "";
-            const d = new Date(times[items[0].dataIndex]);
-            const weekday = d.toLocaleString("en-US", {
-                weekday: "short",
-                timeZone: "America/Los_Angeles",
-            });
-            return `${weekday}  ${items[0].label}`;
+            return items[0].label;
         };
         c.options.scales.x.ticks.maxTicksLimit = 100;
         c.options.scales.x.ticks.callback = (val) => {
             const d = new Date(times[val]);
             return d.toLocaleString("en-US", {
-                month: "short",
-                day: "numeric",
-                timeZone: "America/Los_Angeles",
+                weekday: "short",
+                timeZone: LOCAL_TIMEZONE,
             });
         };
         c.options.scales.x.afterBuildTicks = (scale) => {
@@ -264,7 +261,7 @@ function initCharts(times) {
                     d.toLocaleString("en-US", {
                         hour: "2-digit",
                         hour12: false,
-                        timeZone: "America/Los_Angeles",
+                        timeZone: LOCAL_TIMEZONE,
                     }),
                     10,
                 );
@@ -402,14 +399,15 @@ async function init() {
         return (
             d
                 .toLocaleString("en-US", {
+                    weekday: "short",
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
                     hour12: false,
-                    timeZone: "America/Los_Angeles",
+                    timeZone: LOCAL_TIMEZONE,
                 })
-                .replace(",", "") + ` PT  (+${dh}h)`
+                .replace(",", "") + ` PT (+${dh}h)`
         );
     }
 
