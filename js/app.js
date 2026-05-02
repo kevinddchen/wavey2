@@ -24,12 +24,12 @@ function heightToRGB(h) {
 function drawLegend() {
     const canvas = document.getElementById("legend-canvas");
     const ctx = canvas.getContext("2d");
-    const g = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
     for (let i = 0; i <= MAX_HEIGHT; i++) {
-        const [r, gr, b] = heightToRGB(i);
-        g.addColorStop(i / MAX_HEIGHT, `rgb(${r},${gr},${b})`);
+        const [r, g, b] = heightToRGB(i);
+        gradient.addColorStop(i / MAX_HEIGHT, `rgb(${r},${g},${b})`);
     }
-    ctx.fillStyle = g;
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
