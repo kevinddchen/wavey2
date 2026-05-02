@@ -1,0 +1,34 @@
+[project]
+name = "wavey2"
+version = "0.0.0"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy",
+    "pygrib",
+]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pre-commit",
+    "ruff",
+    "types-requests",
+]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+disallow_any_generics = false
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = [
+    "pygrib",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

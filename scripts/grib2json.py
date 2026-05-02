@@ -4,13 +4,13 @@ Convert an NWPS GRIB2 file to waves.json for the dive-conditions viewer.
 Quick start
 -----------
   # 1. List what variables are in the file
-  python3 grib2json.py mtr_nwps_CG3_20260430_1200.grib2 --list
+  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2 --list
 
   # 2. Convert using auto-detected variable names
-  python3 grib2json.py mtr_nwps_CG3_20260430_1200.grib2
+  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2
 
   # 3. Override variable names if auto-detection fails
-  python3 grib2json.py mtr_nwps_CG3_20260430_1200.grib2 \
+  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2 \
       --wave-height swh --wave-dir mwd --water-level ssh
 
 Requirements
