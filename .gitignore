@@ -146,5 +146,6 @@ vite.config.ts.timestamp-*
 
 .claude
 .DS_Store
+.venv
 *.grib2
 data
