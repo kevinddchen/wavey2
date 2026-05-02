@@ -37,8 +37,8 @@ jobs:
 
             - name: Build site
               run: |
-                  uv run scripts/download_latest_grib.py --path latest.grib2
-                  uv run python scripts/grib2json.py latest.grib2
+                  GRIB=$(uv run scripts/download_latest_grib.py)
+                  uv run python scripts/grib2json.py "$GRIB"
                   mkdir _site
                   cp index.html _site/
                   cp -r css js data _site/

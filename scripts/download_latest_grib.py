@@ -237,7 +237,8 @@ def main() -> None:
     args = parser.parse_args()
 
     url = get_most_recent_forecast()
-    download_forecast(url, dir=args.dir, path=args.path)
+    file_path = download_forecast(url, dir=args.dir, path=args.path)
+    print(file_path)
 
 
 if __name__ == "__main__":
