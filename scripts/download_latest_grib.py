@@ -220,6 +220,7 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
     r = requests.get(url, stream=True)
     r.raise_for_status()
 
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as file:
         for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
             file.write(chunk)
