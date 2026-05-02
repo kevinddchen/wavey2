@@ -13,20 +13,34 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 - Interactive Leaflet map with a wave-height heatmap overlay (blue = calm, red = rough)
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
-    - Wave height (m)
+    - Significant wave height (ft)
     - Wave direction (0–360°, with compass labels)
-    - Water level / tide (m)
+    - Water level / tide (ft)
 - A yellow cursor on the charts tracks the currently selected time step
+
+## NOAA Nearshore Wave Prediction System
+
+The [NOAA Nearshore Wave Prediction System (NWPS)](https://polar.ncep.noaa.gov/nwps/) is a NOAA service that produces
+wave forecasts for U.S. coastal areas. This project pulls forecast data for Monterey Bay and visualizes it as a heatmap.
+A live NOAA visualization of wave heights for Monterey Bay is available
+[here](https://polar.ncep.noaa.gov/nwps/nwpsloop.php?site=MTR&loop=sigwaveheight&cg=3).
 
 ## Project structure
 
 ```
 wavey2/
-├── index.html            # Main page
-├── css/style.css         # Dark marine theme
-├── js/app.js             # Map, heatmap, and chart logic
-├── data/waves.json       # Pre-processed forecast data (generated from GRIB2)
-└── scripts/grib2json.py  # GRIB2 → JSON conversion script
+├── index.html                          # Main page
+├── css/style.css                       # Dark marine theme
+├── js/app.js                           # Map, heatmap, and chart logic
+├── data/waves.json                     # Pre-processed forecast data (generated from GRIB2)
+├── scripts/
+│   ├── download_latest_grib.py         # Download latest GRIB2 file from NOAA
+│   └── grib2json.py                    # GRIB2 → JSON conversion script
+├── .github/workflows/
+│   ├── check.yml                       # Python and JS lint/format checks
+│   └── deploy.yml                      # Deploy to GitHub Pages
+├── pyproject.toml                      # Python project config (uv, mypy, ruff)
+└── package.json                        # Node.js config (prettier)
 ```
 
 ## Data format
@@ -40,7 +54,7 @@ wavey2/
     "forecast_time": "2026-04-30T12:00:00Z",
     "times": ["2026-04-30T13:00:00Z", "..."],
     "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
-    "units": { "wave_height": "m", "wave_dir": "°", "water_level": "m" }
+    "units": { "wave_height": "ft", "wave_dir": "degrees", "water_level": "ft" }
   },
   "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
   "wave_dir":     [[t0, t1, ...], ...],
@@ -82,10 +96,10 @@ A plain file server is required because the page uses `fetch()` to load `data/wa
 ## Hosting on GitHub Pages
 
 1. Push this repository to GitHub.
-2. Go to **Settings → Pages** and set the source to the `main` branch, root directory.
+2. Go to **Settings → Pages** and set the source to **GitHub Actions**.
 3. The site will be available at `https://<username>.github.io/<repo>/`.
 
-No build step is needed — everything is static HTML, CSS, and JavaScript.
+The `.github/workflows/deploy.yml` workflow handles the build and deploy. It runs automatically twice a day (07:00 and 13:00 UTC) to refresh the forecast data, and can also be triggered manually from the Actions tab.
 
 ## Developer tools
 
