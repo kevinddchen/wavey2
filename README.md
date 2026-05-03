@@ -55,7 +55,7 @@ wavey2/
     "forecast_time": "2026-04-30T12:00:00Z",
     "times": ["2026-04-30T13:00:00Z", "..."],
     "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
-    "units": { "wave_height": "ft", "wave_dir": "deg", "wave_period": "sec", "water_level": "ft" }
+    "units": { "wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m" }
   },
   "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
   "wave_dir":     [[t0, t1, ...], ...],
