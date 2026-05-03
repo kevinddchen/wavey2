@@ -13,6 +13,7 @@
     "overrides": [
       {
         "files": [
+          "*.html",
           "*.json",
           "*.yaml",
           "*.yml"

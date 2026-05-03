@@ -1,70 +1,70 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Monterey Bay Dive Conditions</title>
-        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <link rel="stylesheet" href="css/style.css" />
-    </head>
-    <body>
-        <div id="app">
-            <div id="map-panel">
-                <div id="map"></div>
-                <div id="time-control">
-                    <button id="play-btn" title="Play/Pause">&#9654;</button>
-                    <input type="range" id="time-slider" min="0" value="0" step="1" />
-                    <span id="time-label"></span>
-                    <div id="legend">
-                        <canvas id="legend-canvas" width="180" height="14"></canvas>
-                        <div class="legend-labels"><span>0 ft</span><span>6 ft</span><span>12+ ft</span></div>
-                        <span class="legend-title">Significant Wave Height</span>
-                    </div>
-                </div>
-            </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monterey Bay Dive Conditions</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="map-panel">
+        <div id="map"></div>
+        <div id="time-control">
+          <button id="play-btn" title="Play/Pause">&#9654;</button>
+          <input type="range" id="time-slider" min="0" value="0" step="1" />
+          <span id="time-label"></span>
+          <div id="legend">
+            <canvas id="legend-canvas" width="180" height="14"></canvas>
+            <div class="legend-labels"><span>0 ft</span><span>6 ft</span><span>12+ ft</span></div>
+            <span class="legend-title">Significant Wave Height</span>
+          </div>
+        </div>
+      </div>
 
-            <div id="sidebar">
-                <div id="info-panel">
-                    <h1>Monterey Bay Dive Conditions</h1>
-                    <p id="status"></p>
-                    <div id="demo-banner" style="display: none">
-                        &#9888; No data &mdash; run
-                        <code>scripts/grib2json.py</code> to generate data
-                    </div>
-                    <p id="instructions">Click the map to view conditions at a location.</p>
-                    <div id="selected-info" style="display: none">
-                        <span id="selected-coords"></span>
-                    </div>
-                </div>
-
-                <div id="charts-panel">
-                    <div class="chart-container">
-                        <h3>Significant Wave Height</h3>
-                        <canvas id="chart-height"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>Wave Period</h3>
-                        <canvas id="chart-period"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>Wave Direction</h3>
-                        <canvas id="chart-dir"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>Water Level / Tide</h3>
-                        <canvas id="chart-tide"></canvas>
-                    </div>
-                    <a id="github-link" href="https://github.com/kevinddchen/wavey2" target="_blank" rel="noopener"
-                        >View on GitHub · <span id="version-label"></span
-                    ></a>
-                </div>
-            </div>
+      <div id="sidebar">
+        <div id="info-panel">
+          <h1>Monterey Bay Dive Conditions</h1>
+          <p id="status"></p>
+          <div id="demo-banner" style="display: none">
+            &#9888; No data &mdash; run
+            <code>scripts/grib2json.py</code> to generate data
+          </div>
+          <p id="instructions">Click the map to view conditions at a location.</p>
+          <div id="selected-info" style="display: none">
+            <span id="selected-coords"></span>
+          </div>
         </div>
 
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-        <script src="js/version.js"></script>
-        <script src="js/app.js"></script>
-    </body>
+        <div id="charts-panel">
+          <div class="chart-container">
+            <h3>Significant Wave Height</h3>
+            <canvas id="chart-height"></canvas>
+          </div>
+          <div class="chart-container">
+            <h3>Wave Period</h3>
+            <canvas id="chart-period"></canvas>
+          </div>
+          <div class="chart-container">
+            <h3>Wave Direction</h3>
+            <canvas id="chart-dir"></canvas>
+          </div>
+          <div class="chart-container">
+            <h3>Water Level / Tide</h3>
+            <canvas id="chart-tide"></canvas>
+          </div>
+          <a id="github-link" href="https://github.com/kevinddchen/wavey2" target="_blank" rel="noopener"
+            >View on GitHub · <span id="version-label"></span
+          ></a>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/version.js"></script>
+    <script src="js/app.js"></script>
+  </body>
 </html>
