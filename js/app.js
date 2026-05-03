@@ -336,6 +336,8 @@ async function init() {
     // Initialize data
     initData(data);
 
+    document.getElementById("version-label").textContent = `v${VERSION}`;
+
     // Status bar
     document.getElementById("status").textContent =
         `${data.metadata.source} · ${nt} time steps · ${grid.nx}×${grid.ny} grid`;

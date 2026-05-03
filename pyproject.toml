@@ -1,6 +1,6 @@
 [project]
 name = "wavey2"
-version = "0.0.0"
+version = "0.0.0" # Placeholder; version is tracked in `js/version.js`
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4",
