@@ -1,14 +1,26 @@
 {
-    "scripts": {
-        "prettier": "prettier --write .",
-        "prettier:check": "prettier --check ."
-    },
-    "devDependencies": {
-        "prettier": ""
-    },
-    "prettier": {
-        "printWidth": 120,
-        "singleQuote": false,
-        "tabWidth": 4
-    }
+  "scripts": {
+    "prettier": "prettier --write .",
+    "prettier:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": ""
+  },
+  "prettier": {
+    "printWidth": 120,
+    "singleQuote": false,
+    "tabWidth": 4,
+    "overrides": [
+      {
+        "files": [
+          "*.json",
+          "*.yaml",
+          "*.yml"
+        ],
+        "options": {
+          "tabWidth": 2
+        }
+      }
+    ]
+  }
 }
