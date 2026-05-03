@@ -6,10 +6,15 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 // ── Colour scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const STOPS = [
-    [20, 80, 200],
-    [0, 180, 220],
-    [240, 200, 0],
-    [200, 0, 0],
+    [10, 40, 180], // deep blue
+    [20, 110, 255], // bright blue
+    [0, 190, 240], // sky blue
+    [0, 215, 185], // teal
+    [80, 205, 90], // green
+    [225, 215, 0], // yellow
+    [255, 135, 0], // amber
+    [235, 45, 20], // red-orange
+    [160, 0, 0], // dark red
 ];
 
 function heightToRGB(h) {
@@ -237,9 +242,27 @@ function initCharts(times) {
         );
     });
 
+    function heightGradient(context, alpha) {
+        const chart = context.chart;
+        const { ctx: c, chartArea, scales } = chart;
+        if (!chartArea || !scales.x) return `rgba(74,158,218,${alpha})`;
+        const data = chart.data.datasets[0].data;
+        if (!data.length) return `rgba(74,158,218,${alpha})`;
+        const gradient = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+        const width = chartArea.right - chartArea.left;
+        data.forEach((y, i) => {
+            const t = (scales.x.getPixelForValue(i) - chartArea.left) / width;
+            const [r, g, b] = y != null && !isNaN(y) ? heightToRGB(y) : [74, 158, 218];
+            gradient.addColorStop(Math.max(0, Math.min(1, t)), `rgba(${r},${g},${b},${alpha})`);
+        });
+        return gradient;
+    }
+
     charts.height = makeChart("chart-height", "#4a9eda", "ft", 0, null, null);
-    charts.dir = makeChart("chart-dir", "#e07a5f", "degrees", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
-    charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
+    charts.height.data.datasets[0].borderColor = (ctx) => heightGradient(ctx, 1);
+    charts.height.data.datasets[0].backgroundColor = (ctx) => heightGradient(ctx, 0.66);
+    charts.dir = makeChart("chart-dir", "#4a9eda", "degrees", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
+    charts.tide = makeChart("chart-tide", "#4a9eda", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
@@ -295,7 +318,7 @@ function setTimeCursor(tIdx) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-const HEATMAP_OPACITY = 0.75;
+const HEATMAP_OPACITY = 0.8;
 const ARROW_STEP = 8;
 const ARROW_OPACITY = 0.5;
 const MARKER_RADIUS = 8;
