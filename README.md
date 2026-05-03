@@ -4,7 +4,7 @@
 
 > **Disclaimer:** This project was vibe-coded with Claude.
 
-A static webpage that visualizes scuba diving conditions (wave height, wave direction, water level) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
+A static webpage that visualizes scuba diving conditions (wave height, wave period, wave direction, water level) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
 
 This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of the project.
 
@@ -14,7 +14,8 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
     - Significant wave height (ft)
-    - Wave direction (0–360°, with compass labels)
+    - Wave period (sec)
+    - Wave direction (deg)
     - Water level / tide (ft)
 - A yellow cursor on the charts tracks the currently selected time step
 
@@ -54,11 +55,12 @@ wavey2/
     "forecast_time": "2026-04-30T12:00:00Z",
     "times": ["2026-04-30T13:00:00Z", "..."],
     "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
-    "units": { "wave_height": "ft", "wave_dir": "degrees", "water_level": "ft" }
+    "units": { "wave_height": "ft", "wave_dir": "deg", "wave_period": "sec", "water_level": "ft" }
   },
   "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
   "wave_dir":     [[t0, t1, ...], ...],
-  "water_level":  [[t0, t1, ...], ...]   // null if not available in source
+  "wave_period":  [[t0, t1, ...], ...],
+  "water_level":  [[t0, t1, ...], ...]
 }
 ```
 

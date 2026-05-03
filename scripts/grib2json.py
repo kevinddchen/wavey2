@@ -24,6 +24,7 @@ import numpy.typing as npt
 
 HEIGHT_NAME = "swh"
 DIR_NAME = "dirpw"
+PERIOD_NAME = "perpw"
 LEVEL_NAME = "zos"
 
 # ── Types ─────────────────────────────────────────────────────────────────────
@@ -75,11 +76,12 @@ def _best_group(groups: MsgGroup) -> MsgResult:
     return sorted(groups[sn], key=lambda m: m["validDate"]), sn
 
 
-def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult]:
-    """Single-pass read; returns (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l)."""
+def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult, MsgResult]:
+    """Single-pass read; returns (msgs_h, sn_h), (msgs_d, sn_d), (msgs_p, sn_p), (msgs_l, sn_l)."""
     targets: dict[str, MsgGroup] = {
         HEIGHT_NAME.lower(): {},
         DIR_NAME.lower(): {},
+        PERIOD_NAME.lower(): {},
         LEVEL_NAME.lower(): {},
     }
 
@@ -107,6 +109,7 @@ def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult]:
     return (
         _best_group(targets[HEIGHT_NAME.lower()]),
         _best_group(targets[DIR_NAME.lower()]),
+        _best_group(targets[PERIOD_NAME.lower()]),
         _best_group(targets[LEVEL_NAME.lower()]),
     )
 
@@ -193,7 +196,7 @@ def main() -> None:
         return
 
     print("Reading GRIB2 messages...")
-    (msgs_h, sn_h), (msgs_d, sn_d), (msgs_l, sn_l) = load_all_messages(path)
+    (msgs_h, sn_h), (msgs_d, sn_d), (msgs_p, sn_p), (msgs_l, sn_l) = load_all_messages(path)
 
     if msgs_h is None:
         print(f"ERROR: Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
@@ -204,6 +207,10 @@ def main() -> None:
         print(f"  wave_dir     → {sn_d} ({len(msgs_d)} steps)")
     else:
         print("  wave_dir     → NOT FOUND (will be null)")
+    if sn_p and msgs_p:
+        print(f"  wave_period  → {sn_p} ({len(msgs_p)} steps)")
+    else:
+        print("  wave_period  → NOT FOUND (will be null)")
     if sn_l and msgs_l:
         print(f"  water_level  → {sn_l} ({len(msgs_l)} steps)")
     else:
@@ -234,7 +241,7 @@ def main() -> None:
             "forecast_time": ref_time or times_iso[0],
             "times": times_iso,
             "grid": grid,
-            "units": {"wave_height": "m", "wave_dir": "°", "water_level": "m"},
+            "units": {"wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m"},
         },
         "wave_height": to_grid_list(arr_h, args.round),
     }
@@ -244,6 +251,12 @@ def main() -> None:
         out["wave_dir"] = to_grid_list(arr_d[:: args.step], 0)
     else:
         out["wave_dir"] = [[None] * nt] * (ny * nx)
+
+    if msgs_p:
+        _, _, _, arr_p, _ = extract(msgs_p)
+        out["wave_period"] = to_grid_list(arr_p[:: args.step], args.round)
+    else:
+        out["wave_period"] = None
 
     if msgs_l:
         _, _, _, arr_l, _ = extract(msgs_l)
@@ -258,8 +271,6 @@ def main() -> None:
 
     size_mb = out_path.stat().st_size / 1e6
     print(f"\nWrote {out_path}  ({size_mb:.1f} MB)")
-    if size_mb > 20:
-        print("  Tip: large file — consider downsampling the grid before converting.")
 
 
 if __name__ == "__main__":

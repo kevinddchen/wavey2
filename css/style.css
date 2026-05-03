@@ -14,7 +14,7 @@ body {
 
 #app {
     display: grid;
-    grid-template-columns: 1fr clamp(360px, 35%, 480px);
+    grid-template-columns: 1fr clamp(360px, 40%, 600px);
     height: 100vh;
 }
 

@@ -107,10 +107,11 @@ function generateEmptyData() {
             forecast_time: t0.toISOString(),
             times,
             grid: { nx: 90, ny: 178, lat_min: 36.2, lat_max: 37.0, lon_min: -122.2, lon_max: -121.7 },
-            units: { wave_height: "ft", wave_dir: "degrees", water_level: "ft" },
+            units: { wave_height: "ft", wave_dir: "deg", wave_period: "sec", water_level: "ft" },
         },
         wave_height: [],
         wave_dir: [],
+        wave_period: [],
         water_level: [],
         _demo: true,
     };
@@ -261,8 +262,9 @@ function initCharts(times) {
     charts.height = makeChart("chart-height", "#4a9eda", "ft", 0, null, null);
     charts.height.data.datasets[0].borderColor = (ctx) => heightGradient(ctx, 1);
     charts.height.data.datasets[0].backgroundColor = (ctx) => heightGradient(ctx, 0.66);
-    charts.dir = makeChart("chart-dir", "#4a9eda", "degrees", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
-    charts.tide = makeChart("chart-tide", "#4a9eda", "ft", null, null, null);
+    charts.period = makeChart("chart-period", "#a78bfa", "sec", 0, null, null);
+    charts.dir = makeChart("chart-dir", "#e07a5f", "deg", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
+    charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
@@ -301,6 +303,7 @@ function initCharts(times) {
 
 function updateCharts(data, gridIdx, tIdx) {
     charts.height.data.datasets[0].data = data.wave_height[gridIdx] || [];
+    charts.period.data.datasets[0].data = (data.wave_period || [])[gridIdx] || [];
     charts.dir.data.datasets[0].data = data.wave_dir[gridIdx] || [];
     charts.tide.data.datasets[0].data = (data.water_level || [])[gridIdx] || [];
     Object.values(charts).forEach((c) => {
