@@ -3,8 +3,9 @@
 const FEET_PER_METER = 3.28084;
 const LOCAL_TIMEZONE = "America/Los_Angeles";
 
-// ── Colour scale (blue → cyan → yellow → red) ────────────────────────────────
+// ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
+const MAX_WAVE_HEIGHT = 12;
 const STOPS = [
     [10, 40, 180], // deep blue
     [20, 110, 255], // bright blue
@@ -18,7 +19,7 @@ const STOPS = [
 ];
 
 function heightToRGB(h) {
-    const t = Math.min(Math.max(h, 0) / MAX_HEIGHT, 1);
+    const t = Math.min(Math.max(h, 0) / MAX_WAVE_HEIGHT, 1);
     const fi = t * (STOPS.length - 1);
     const lo = Math.floor(fi);
     const hi = Math.min(lo + 1, STOPS.length - 1);
@@ -30,17 +31,15 @@ function drawLegend() {
     const canvas = document.getElementById("legend-canvas");
     const ctx = canvas.getContext("2d");
     const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-    for (let i = 0; i <= MAX_HEIGHT; i++) {
+    for (let i = 0; i <= MAX_WAVE_HEIGHT; i++) {
         const [r, g, b] = heightToRGB(i);
-        gradient.addColorStop(i / MAX_HEIGHT, `rgb(${r},${g},${b})`);
+        gradient.addColorStop(i / MAX_WAVE_HEIGHT, `rgb(${r},${g},${b})`);
     }
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ── Heatmap rendering ────────────────────────────────────────────────────────
-
-const MAX_HEIGHT = 12;
 
 function buildHeatmapURL(data, tIdx) {
     const { nx, ny } = data.metadata.grid;
@@ -97,7 +96,7 @@ async function loadData() {
 }
 
 function generateEmptyData() {
-    const nt = 145;
+    const nt = 145; // usual number of timesteps
     const t0 = new Date();
     const times = Array.from({ length: nt }, (_, i) => new Date(t0.getTime() + i * 3.6e6).toISOString());
 
@@ -107,7 +106,7 @@ function generateEmptyData() {
             forecast_time: t0.toISOString(),
             times,
             grid: { nx: 90, ny: 178, lat_min: 36.2, lat_max: 37.0, lon_min: -122.2, lon_max: -121.7 },
-            units: { wave_height: "ft", wave_dir: "deg", wave_period: "sec", water_level: "ft" },
+            units: { wave_height: "m", wave_dir: "°", wave_period: "s", water_level: "m" },
         },
         wave_height: [],
         wave_dir: [],
@@ -127,6 +126,7 @@ function initData(data) {
             if (series[i] != null) series[i] = +(series[i] * FEET_PER_METER).toFixed(2);
     }
     for (const series of data.wave_dir) {
+        // need to add 180° because `wave_dir` points toward the wave origin
         for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = (series[i] + 180) % 360;
     }
 }
@@ -319,50 +319,47 @@ function setTimeCursor(tIdx) {
     });
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// ── Time display ─────────────────────────────────────────────────────────────
 
-const HEATMAP_OPACITY = 0.8;
-const ARROW_STEP = 8;
-const ARROW_OPACITY = 0.5;
-const MARKER_RADIUS = 8;
-const START_MARKER_LAT = 36.6113; // Coordinates for Breakwater cove, i.e. San Carlos beach
-const START_MARKER_LNG = -121.891;
+function fmtTime(isoStr, forecastTime) {
+    const d = new Date(isoStr);
+    const dh = Math.round((d - new Date(forecastTime)) / 3.6e6);
+    return (
+        d
+            .toLocaleString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: LOCAL_TIMEZONE,
+            })
+            .replace(",", "") + ` PT (+${dh}h)`
+    );
+}
 
-async function init() {
-    const data = await loadData();
-    const { times, grid } = data.metadata;
-    const nt = times.length;
+// ── Arrow overlay ─────────────────────────────────────────────────────────────
 
-    // Initialize data
-    initData(data);
+function drawArrow(ctx, x, y, deg, len = 10) {
+    const rad = (deg * Math.PI) / 180;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rad);
+    ctx.beginPath();
+    ctx.moveTo(0, -len);
+    ctx.lineTo(len * 0.35, len * 0.3);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(-len * 0.35, len * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fill();
+    ctx.restore();
+}
 
-    document.getElementById("version-label").textContent = `v${VERSION}`;
-
-    // Status bar
-    document.getElementById("status").textContent =
-        `${data.metadata.source} · ${nt} time steps · ${grid.nx}×${grid.ny} grid`;
-    if (data._demo) document.getElementById("demo-banner").style.display = "block";
-
-    // Leaflet map
-    const map = L.map("map").setView([(grid.lat_min + grid.lat_max) / 2, (grid.lon_min + grid.lon_max) / 2], 10);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18,
-    }).addTo(map);
-
-    // Wave-height heatmap overlay
-    const mapBounds = [
-        [grid.lat_min, grid.lon_min],
-        [grid.lat_max, grid.lon_max],
-    ];
-    const heatLayer = L.imageOverlay("", mapBounds, {
-        opacity: HEATMAP_OPACITY,
-        interactive: false,
-    }).addTo(map);
-
-    // Wave-direction arrow overlay — appended to a custom Leaflet pane so its
-    // z-index (450) competes inside leaflet-map-pane's stacking context,
-    // keeping it below marker-pane (600) rather than above all panes.
+// Appended to a custom Leaflet pane (z-index 450) so it sits below marker-pane
+// (600) but above the tile layer inside leaflet-map-pane's stacking context.
+function initArrowOverlay(map, grid, data) {
     const arrowPane = map.createPane("arrowPane");
     arrowPane.style.zIndex = 450;
     arrowPane.style.pointerEvents = "none";
@@ -372,29 +369,12 @@ async function init() {
 
     function sizeArrowCanvas() {
         const c = map.getContainer();
-        const cr = map.getContainer().getBoundingClientRect();
+        const cr = c.getBoundingClientRect();
         const pr = map.getPanes().mapPane.getBoundingClientRect();
-        const pos = { x: pr.left - cr.left, y: pr.top - cr.top };
         arrowCanvas.width = c.clientWidth;
         arrowCanvas.height = c.clientHeight;
-        arrowCanvas.style.left = -pos.x + "px";
-        arrowCanvas.style.top = -pos.y + "px";
-    }
-
-    function drawArrow(ctx, x, y, deg, len = 10) {
-        const rad = (deg * Math.PI) / 180;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(rad);
-        ctx.beginPath();
-        ctx.moveTo(0, -len);
-        ctx.lineTo(len * 0.35, len * 0.3);
-        ctx.lineTo(0, 0);
-        ctx.lineTo(-len * 0.35, len * 0.3);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(0,0,0,${ARROW_OPACITY})`;
-        ctx.fill();
-        ctx.restore();
+        arrowCanvas.style.left = -(pr.left - cr.left) + "px";
+        arrowCanvas.style.top = -(pr.top - cr.top) + "px";
     }
 
     let arrowTIdx = 0;
@@ -403,7 +383,7 @@ async function init() {
         const actx = arrowCanvas.getContext("2d");
         actx.clearRect(0, 0, arrowCanvas.width, arrowCanvas.height);
         const { nx, ny, lat_min, lat_max, lon_min, lon_max } = grid;
-        const step = ARROW_STEP;
+        const step = 8; // draw an arrow every `step` grid points
         for (let gy = 0; gy < ny; gy += step) {
             for (let gx = 0; gx < nx; gx += step) {
                 const dir = data.wave_dir[gy * nx + gx]?.[i];
@@ -422,25 +402,37 @@ async function init() {
         drawArrows(arrowTIdx);
     });
 
-    // Time helpers
-    function fmtTime(isoStr) {
-        const d = new Date(isoStr);
-        const dh = Math.round((d - new Date(data.metadata.forecast_time)) / 3.6e6);
-        return (
-            d
-                .toLocaleString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                    timeZone: LOCAL_TIMEZONE,
-                })
-                .replace(",", "") + ` PT (+${dh}h)`
-        );
-    }
+    return drawArrows;
+}
 
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+    const data = await loadData();
+    const { times, grid } = data.metadata;
+    const nt = times.length;
+
+    initData(data);
+
+    document.getElementById("version-label").textContent = `v${VERSION}`;
+    document.getElementById("status").textContent =
+        `${data.metadata.source} · ${nt} time steps · ${grid.nx}×${grid.ny} grid`;
+    if (data._demo) document.getElementById("demo-banner").style.display = "block";
+
+    // Map
+    const map = L.map("map").setView([(grid.lat_min + grid.lat_max) / 2, (grid.lon_min + grid.lon_max) / 2], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18,
+    }).addTo(map);
+    const mapBounds = [
+        [grid.lat_min, grid.lon_min],
+        [grid.lat_max, grid.lon_max],
+    ];
+    const heatLayer = L.imageOverlay("", mapBounds, { opacity: 0.8, interactive: false }).addTo(map);
+    const drawArrows = initArrowOverlay(map, grid, data);
+
+    // Time control
     const slider = document.getElementById("time-slider");
     const timeLabel = document.getElementById("time-label");
     slider.max = nt - 1;
@@ -449,7 +441,7 @@ async function init() {
     function applyTime(i) {
         tIdx = i;
         slider.value = i;
-        timeLabel.textContent = fmtTime(times[i]);
+        timeLabel.textContent = fmtTime(times[i], data.metadata.forecast_time);
         heatLayer.setUrl(buildHeatmapURL(data, i));
         drawArrows(i);
         setTimeCursor(i);
@@ -458,7 +450,6 @@ async function init() {
     applyTime(0);
     slider.addEventListener("input", () => applyTime(+slider.value));
 
-    // Play / pause
     let playing = false,
         timer = null;
     const playBtn = document.getElementById("play-btn");
@@ -474,22 +465,24 @@ async function init() {
 
     // Charts
     initCharts(times);
+    drawLegend();
 
     // Drag-to-scrub on charts
     let chartDragging = false;
     function scrubChart(chart, clientX) {
-        const rect = chart.canvas.getBoundingClientRect();
-        const x = clientX - rect.left;
         const { left, right } = chart.chartArea;
-        const idx = Math.round(chart.scales.x.getValueForPixel(Math.max(left, Math.min(right, x))));
-        applyTime(Math.max(0, Math.min(nt - 1, idx)));
+        const x = clientX - chart.canvas.getBoundingClientRect().left;
+        const ratio = (Math.max(left, Math.min(right, x)) - left) / (right - left);
+        applyTime(Math.round(ratio * (nt - 1)));
     }
     Object.values(charts).forEach((chart) => {
-        chart.canvas.addEventListener("mousedown", (e) => {
+        const el = chart.canvas.parentNode;
+        el.addEventListener("mousedown", (e) => {
+            e.preventDefault();
             chartDragging = true;
             scrubChart(chart, e.clientX);
         });
-        chart.canvas.addEventListener("mousemove", (e) => {
+        el.addEventListener("mousemove", (e) => {
             if (chartDragging) scrubChart(chart, e.clientX);
         });
     });
@@ -497,18 +490,15 @@ async function init() {
         chartDragging = false;
     });
 
-    drawLegend();
-
-    // Click on map → pick point, show charts
+    // Map click → select nearest point
     let marker = null;
     let selectedIdx = null;
 
     function selectPoint(lat, lng) {
         const pt = nearestPoint(grid, lat, lng);
-
         if (!marker) {
             marker = L.circleMarker([pt.lat, pt.lng], {
-                radius: MARKER_RADIUS,
+                radius: 8,
                 color: "#fff",
                 fillColor: "#ffd700",
                 fillOpacity: 1,
@@ -518,19 +508,16 @@ async function init() {
         } else {
             marker.setLatLng([pt.lat, pt.lng]);
         }
-
         document.getElementById("instructions").style.display = "none";
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lng).toFixed(4)}°W`;
         document.getElementById("selected-info").style.display = "block";
-
         selectedIdx = pt.idx;
         updateCharts(data, selectedIdx, tIdx);
     }
 
     map.on("click", ({ latlng: { lat, lng } }) => selectPoint(lat, lng));
-
-    selectPoint(START_MARKER_LAT, START_MARKER_LNG);
+    selectPoint(36.6113, -121.891); // set initial marker to Breakwater
 }
 
 document.addEventListener("DOMContentLoaded", init);
