@@ -474,6 +474,29 @@ async function init() {
 
     // Charts
     initCharts(times);
+
+    // Drag-to-scrub on charts
+    let chartDragging = false;
+    function scrubChart(chart, clientX) {
+        const rect = chart.canvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const { left, right } = chart.chartArea;
+        const idx = Math.round(chart.scales.x.getValueForPixel(Math.max(left, Math.min(right, x))));
+        applyTime(Math.max(0, Math.min(nt - 1, idx)));
+    }
+    Object.values(charts).forEach((chart) => {
+        chart.canvas.addEventListener("mousedown", (e) => {
+            chartDragging = true;
+            scrubChart(chart, e.clientX);
+        });
+        chart.canvas.addEventListener("mousemove", (e) => {
+            if (chartDragging) scrubChart(chart, e.clientX);
+        });
+    });
+    window.addEventListener("mouseup", () => {
+        chartDragging = false;
+    });
+
     drawLegend();
 
     // Click on map → pick point, show charts
