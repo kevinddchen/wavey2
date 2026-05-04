@@ -158,7 +158,7 @@ Chart.register({
     },
 });
 
-function makeChart(id, color, yLabel, yMin, yMax, tickCb) {
+function makeChart(id, color, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
     const cfg = {
         type: "line",
         data: {
@@ -214,6 +214,7 @@ function makeChart(id, color, yLabel, yMin, yMax, tickCb) {
                         color: TICK_COLOR,
                         font: { size: 10 },
                         ...(tickCb ? { callback: tickCb } : {}),
+                        ...yTickOptions,
                     },
                     grid: { color: GRID_COLOR },
                 },
@@ -263,7 +264,7 @@ function initCharts(times) {
     charts.height.data.datasets[0].borderColor = (ctx) => heightGradient(ctx, 1);
     charts.height.data.datasets[0].backgroundColor = (ctx) => heightGradient(ctx, 0.66);
     charts.period = makeChart("chart-period", "#a78bfa", "sec", 0, null, null);
-    charts.dir = makeChart("chart-dir", "#e07a5f", "deg", 0, 360, (v) => (v % 45 === 0 ? `${v}°` : null));
+    charts.dir = makeChart("chart-dir", "#e07a5f", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
     charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
