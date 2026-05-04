@@ -1,9 +1,14 @@
 {
   "scripts": {
-    "prettier": "prettier --write .",
-    "prettier:check": "prettier --check ."
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write .",
+    "eslint": "eslint .",
+    "eslint:fix": "eslint . --fix"
   },
   "devDependencies": {
+    "@eslint/js": "",
+    "eslint": "",
+    "globals": "",
     "prettier": ""
   },
   "prettier": {
