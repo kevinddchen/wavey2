@@ -41,7 +41,7 @@ wavey2/
 │   ├── check.yml                       # Python and JS lint/format checks
 │   └── deploy.yml                      # Deploy to GitHub Pages
 ├── pyproject.toml                      # Python project config (uv, mypy, ruff)
-└── package.json                        # Node.js config (prettier)
+└── package.json                        # Node.js config (eslint, prettier)
 ```
 
 ## Data format
@@ -124,5 +124,6 @@ uv run ruff format
 ### Javascript checks
 
 ```bash
+npm run eslint
 npm run prettier
 ```
