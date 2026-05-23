@@ -14,8 +14,23 @@ body {
 
 #app {
     display: grid;
-    grid-template-columns: 1fr clamp(360px, 40%, 600px);
+    grid-template-columns: 1fr 5px var(--sidebar-width, 50%);
     height: 100vh;
+}
+
+#resizer {
+    background: #1d3556;
+    cursor: col-resize;
+    transition: background 0.15s;
+}
+#resizer:hover,
+body.resizing #resizer {
+    background: #2585c4;
+}
+
+body.resizing {
+    cursor: col-resize;
+    user-select: none;
 }
 
 /* ── Map panel ── */
@@ -23,6 +38,8 @@ body {
 #map-panel {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
 }
 
 #map {
@@ -138,7 +155,6 @@ body {
 
 #sidebar {
     background: #0c1326;
-    border-left: 1px solid #1d3556;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -249,8 +265,10 @@ body {
     #map-panel {
         height: 55vh;
     }
+    #resizer {
+        display: none;
+    }
     #sidebar {
-        border-left: none;
         border-top: 1px solid #1d3556;
     }
 }

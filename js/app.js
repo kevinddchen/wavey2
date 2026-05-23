@@ -587,6 +587,30 @@ async function init() {
     });
     map.on("moveend", syncUrl);
 
+    // Sidebar resizer (drag the divider to resize the sidebar)
+    const resizer = document.getElementById("resizer");
+    const app = document.getElementById("app");
+    let resizing = false;
+    resizer.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        resizing = true;
+        document.body.classList.add("resizing");
+    });
+    window.addEventListener("mousemove", (e) => {
+        if (!resizing) return;
+        const minSidebar = 280;
+        const minMap = 400; // enough room for play button + slider + legend
+        const maxSidebar = Math.max(minSidebar, window.innerWidth - minMap);
+        const w = Math.max(minSidebar, Math.min(maxSidebar, window.innerWidth - e.clientX));
+        app.style.setProperty("--sidebar-width", w + "px");
+        map.invalidateSize();
+    });
+    window.addEventListener("mouseup", () => {
+        if (!resizing) return;
+        resizing = false;
+        document.body.classList.remove("resizing");
+    });
+
     syncUrl(); // populate URL with current (defaults or URL-provided) values
 }
 
