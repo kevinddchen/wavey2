@@ -10,14 +10,32 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 
 ## Features
 
-- Interactive Leaflet map with a wave-height heatmap overlay (blue = calm, red = rough)
+- Interactive Leaflet map with a wave-height heatmap overlay
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
-    - Significant wave height (ft)
-    - Wave period (sec)
-    - Wave direction (deg)
-    - Water level / tide (ft)
-- A yellow cursor on the charts tracks the currently selected time step
+    - Significant wave height
+    - Wave period
+    - Wave direction
+    - Water level / tide
+- A cursor on the charts tracks the currently selected time step
+- URL parameters (`lat`, `lon`, `mapLat`, `mapLon`, `zoom`) capture the current view so you can bookmark or share a link to a specific location
+
+## Embedding on another site
+
+The page can be embedded via `<iframe>`. A minimal example:
+
+```html
+<iframe src="https://kevinddchen.github.io/wavey2/" loading="lazy"></iframe>
+```
+
+Use the URL parameters above to deep-link to a specific location. For example, to open with the marker on Lovers Point:
+
+```html
+<iframe
+    src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022&mapLat=36.6203&mapLon=-121.9022&zoom=14"
+    loading="lazy"
+></iframe>
+```
 
 ## NOAA Nearshore Wave Prediction System
 
@@ -25,46 +43,6 @@ The [NOAA Nearshore Wave Prediction System (NWPS)](https://polar.ncep.noaa.gov/n
 wave forecasts for U.S. coastal areas. This project pulls forecast data for Monterey Bay and visualizes it as a heatmap.
 A live NOAA visualization of wave heights for Monterey Bay is available
 [here](https://polar.ncep.noaa.gov/nwps/nwpsloop.php?site=MTR&loop=sigwaveheight&cg=3).
-
-## Project structure
-
-```
-wavey2/
-├── index.html                          # Main page
-├── css/style.css                       # Dark marine theme
-├── js/app.js                           # Map, heatmap, and chart logic
-├── data/waves.json                     # Pre-processed forecast data (generated from GRIB2)
-├── scripts/
-│   ├── download_latest_grib.py         # Download latest GRIB2 file from NOAA
-│   └── grib2json.py                    # GRIB2 → JSON conversion script
-├── .github/workflows/
-│   ├── check.yml                       # Python and JS lint/format checks
-│   └── deploy.yml                      # Deploy to GitHub Pages
-├── pyproject.toml                      # Python project config (uv, mypy, ruff)
-└── package.json                        # Node.js config (eslint, prettier)
-```
-
-## Data format
-
-`data/waves.json` contains a regular lat/lon grid with time-series arrays at each grid point:
-
-```json
-{
-  "metadata": {
-    "source": "NOAA NWPS – mtr_nwps_CG3_20260430_1200.grib2",
-    "forecast_time": "2026-04-30T12:00:00Z",
-    "times": ["2026-04-30T13:00:00Z", "..."],
-    "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
-    "units": { "wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m" }
-  },
-  "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
-  "wave_dir":     [[t0, t1, ...], ...],
-  "wave_period":  [[t0, t1, ...], ...],
-  "water_level":  [[t0, t1, ...], ...]
-}
-```
-
-Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 
 ## Generating data from GRIB2 file
 
@@ -86,6 +64,26 @@ uv run python scripts/download_latest_grib.py
 ```bash
 uv run python scripts/grib2json.py YOUR_FILE.grib2
 ```
+
+This creates a file `data/waves.json` that contains a regular lat/lon grid with time-series arrays at each grid point:
+
+```json
+{
+  "metadata": {
+    "source": "NOAA NWPS – mtr_nwps_CG3_20260430_1200.grib2",
+    "forecast_time": "2026-04-30T12:00:00Z",
+    "times": ["2026-04-30T13:00:00Z", "..."],
+    "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
+    "units": { "wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m" }
+  },
+  "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
+  "wave_dir":     [[t0, t1, ...], ...],
+  "wave_period":  [[t0, t1, ...], ...],
+  "water_level":  [[t0, t1, ...], ...]
+}
+```
+
+Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 
 ## Local development
 

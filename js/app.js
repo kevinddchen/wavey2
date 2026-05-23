@@ -5,9 +5,9 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 
 // Default view state (used when no URL params are provided)
 const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
-const DEFAULT_MARKER_LNG = -121.891;
+const DEFAULT_MARKER_LON = -121.891;
 const DEFAULT_MAP_LAT = 36.6;
-const DEFAULT_MAP_LNG = -121.95;
+const DEFAULT_MAP_LON = -121.95;
 const DEFAULT_ZOOM = 11;
 
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
@@ -78,15 +78,15 @@ function buildHeatmapURL(data, tIdx) {
 
 // ── Grid lookup ──────────────────────────────────────────────────────────────
 
-function nearestPoint(grid, lat, lng) {
-    const x = Math.round(((lng - grid.lon_min) / (grid.lon_max - grid.lon_min)) * (grid.nx - 1));
+function nearestPoint(grid, lat, lon) {
+    const x = Math.round(((lon - grid.lon_min) / (grid.lon_max - grid.lon_min)) * (grid.nx - 1));
     const y = Math.round(((lat - grid.lat_min) / (grid.lat_max - grid.lat_min)) * (grid.ny - 1));
     const cx = Math.max(0, Math.min(grid.nx - 1, x));
     const cy = Math.max(0, Math.min(grid.ny - 1, y));
     return {
         idx: cy * grid.nx + cx,
         lat: grid.lat_min + (cy / (grid.ny - 1)) * (grid.lat_max - grid.lat_min),
-        lng: grid.lon_min + (cx / (grid.nx - 1)) * (grid.lon_max - grid.lon_min),
+        lon: grid.lon_min + (cx / (grid.nx - 1)) * (grid.lon_max - grid.lon_min),
     };
 }
 
@@ -397,8 +397,8 @@ function initArrowOverlay(map, grid, data) {
                 const dir = data.wave_dir[gy * nx + gx]?.[i];
                 if (dir == null) continue;
                 const lat = lat_min + (gy / (ny - 1)) * (lat_max - lat_min);
-                const lng = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
-                const pt = map.latLngToContainerPoint([lat, lng]);
+                const lon = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
+                const pt = map.latLngToContainerPoint([lat, lon]);
                 drawArrow(actx, pt.x, pt.y, dir);
             }
         }
@@ -425,23 +425,23 @@ function readUrlState() {
     };
     return {
         lat: num("lat"),
-        lng: num("lng"),
+        lon: num("lon"),
         mapLat: num("mapLat"),
-        mapLng: num("mapLng"),
+        mapLon: num("mapLon"),
         zoom: num("zoom"),
     };
 }
 
-function writeUrlState({ lat, lng, mapLat, mapLng, zoom }) {
+function writeUrlState({ lat, lon, mapLat, mapLon, zoom }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
         else p.set(k, digits != null ? v.toFixed(digits) : String(v));
     };
     set("lat", lat, 4);
-    set("lng", lng, 4);
+    set("lon", lon, 4);
     set("mapLat", mapLat, 4);
-    set("mapLng", mapLng, 4);
+    set("mapLon", mapLon, 4);
     set("zoom", zoom);
     const qs = p.toString();
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
@@ -465,9 +465,9 @@ async function init() {
 
     // Map
     const initialCenter =
-        urlState.mapLat != null && urlState.mapLng != null
-            ? [urlState.mapLat, urlState.mapLng]
-            : [DEFAULT_MAP_LAT, DEFAULT_MAP_LNG];
+        urlState.mapLat != null && urlState.mapLon != null
+            ? [urlState.mapLat, urlState.mapLon]
+            : [DEFAULT_MAP_LAT, DEFAULT_MAP_LON];
     const initialZoom = urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM;
     const map = L.map("map").setView(initialCenter, initialZoom);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -543,10 +543,10 @@ async function init() {
     let marker = null;
     let selectedIdx = null;
 
-    function selectPoint(lat, lng) {
-        const pt = nearestPoint(grid, lat, lng);
+    function selectPoint(lat, lon) {
+        const pt = nearestPoint(grid, lat, lon);
         if (!marker) {
-            marker = L.circleMarker([pt.lat, pt.lng], {
+            marker = L.circleMarker([pt.lat, pt.lon], {
                 radius: 8,
                 color: "#fff",
                 fillColor: "#ffd700",
@@ -555,11 +555,11 @@ async function init() {
                 pane: "markerPane",
             }).addTo(map);
         } else {
-            marker.setLatLng([pt.lat, pt.lng]);
+            marker.setLatLng([pt.lat, pt.lon]);
         }
         document.getElementById("instructions").style.display = "none";
         document.getElementById("selected-coords").textContent =
-            `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lng).toFixed(4)}°W`;
+            `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
         document.getElementById("selected-info").style.display = "block";
         selectedIdx = pt.idx;
         updateCharts(data, selectedIdx, tIdx);
@@ -569,20 +569,20 @@ async function init() {
         const c = map.getCenter();
         writeUrlState({
             lat: marker ? marker.getLatLng().lat : null,
-            lng: marker ? marker.getLatLng().lng : null,
+            lon: marker ? marker.getLatLng().lng : null,
             mapLat: c.lat,
-            mapLng: c.lng,
+            mapLon: c.lng,
             zoom: map.getZoom(),
         });
     }
 
     // Initial marker: URL params, else default
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
-    const initialMarkerLng = urlState.lng != null ? urlState.lng : DEFAULT_MARKER_LNG;
-    selectPoint(initialMarkerLat, initialMarkerLng);
+    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_MARKER_LON;
+    selectPoint(initialMarkerLat, initialMarkerLon);
 
-    map.on("click", ({ latlng: { lat, lng } }) => {
-        selectPoint(lat, lng);
+    map.on("click", ({ latlng: { lat, lng: lon } }) => {
+        selectPoint(lat, lon);
         syncUrl();
     });
     map.on("moveend", syncUrl);
