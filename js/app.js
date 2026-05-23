@@ -3,6 +3,13 @@
 const FEET_PER_METER = 3.28084;
 const LOCAL_TIMEZONE = "America/Los_Angeles";
 
+// Default view state (used when no URL params are provided)
+const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
+const DEFAULT_MARKER_LNG = -121.891;
+const DEFAULT_MAP_LAT = 36.6;
+const DEFAULT_MAP_LNG = -121.95;
+const DEFAULT_ZOOM = 11;
+
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const MAX_WAVE_HEIGHT = 12;
@@ -406,6 +413,40 @@ function initArrowOverlay(map, grid, data) {
     return drawArrows;
 }
 
+// ── URL state ────────────────────────────────────────────────────────────────
+
+function readUrlState() {
+    const p = new URLSearchParams(window.location.search);
+    const num = (k) => {
+        const v = p.get(k);
+        if (v == null) return null;
+        const n = parseFloat(v);
+        return isFinite(n) ? n : null;
+    };
+    return {
+        lat: num("lat"),
+        lng: num("lng"),
+        mapLat: num("mapLat"),
+        mapLng: num("mapLng"),
+        zoom: num("zoom"),
+    };
+}
+
+function writeUrlState({ lat, lng, mapLat, mapLng, zoom }) {
+    const p = new URLSearchParams(window.location.search);
+    const set = (k, v, digits) => {
+        if (v == null || isNaN(v)) p.delete(k);
+        else p.set(k, digits != null ? v.toFixed(digits) : String(v));
+    };
+    set("lat", lat, 4);
+    set("lng", lng, 4);
+    set("mapLat", mapLat, 4);
+    set("mapLng", mapLng, 4);
+    set("zoom", zoom);
+    const qs = p.toString();
+    history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -415,13 +456,20 @@ async function init() {
 
     initData(data);
 
+    const urlState = readUrlState();
+
     document.getElementById("version-label").textContent = `v${VERSION}`;
     document.getElementById("status").textContent =
         `${data.metadata.source} · ${nt} time steps · ${grid.nx}×${grid.ny} grid`;
     if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
     // Map
-    const map = L.map("map").setView([(grid.lat_min + grid.lat_max) / 2, (grid.lon_min + grid.lon_max) / 2], 10);
+    const initialCenter =
+        urlState.mapLat != null && urlState.mapLng != null
+            ? [urlState.mapLat, urlState.mapLng]
+            : [DEFAULT_MAP_LAT, DEFAULT_MAP_LNG];
+    const initialZoom = urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM;
+    const map = L.map("map").setView(initialCenter, initialZoom);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18,
@@ -517,8 +565,29 @@ async function init() {
         updateCharts(data, selectedIdx, tIdx);
     }
 
-    map.on("click", ({ latlng: { lat, lng } }) => selectPoint(lat, lng));
-    selectPoint(36.6113, -121.891); // set initial marker to Breakwater
+    function syncUrl() {
+        const c = map.getCenter();
+        writeUrlState({
+            lat: marker ? marker.getLatLng().lat : null,
+            lng: marker ? marker.getLatLng().lng : null,
+            mapLat: c.lat,
+            mapLng: c.lng,
+            zoom: map.getZoom(),
+        });
+    }
+
+    // Initial marker: URL params, else default
+    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
+    const initialMarkerLng = urlState.lng != null ? urlState.lng : DEFAULT_MARKER_LNG;
+    selectPoint(initialMarkerLat, initialMarkerLng);
+
+    map.on("click", ({ latlng: { lat, lng } }) => {
+        selectPoint(lat, lng);
+        syncUrl();
+    });
+    map.on("moveend", syncUrl);
+
+    syncUrl(); // populate URL with current (defaults or URL-provided) values
 }
 
 document.addEventListener("DOMContentLoaded", init);
