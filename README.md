@@ -32,8 +32,8 @@ Use the URL parameters above to deep-link to a specific location. For example, t
 
 ```html
 <iframe
-  src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022&mapLat=36.6203&mapLon=-121.9022&zoom=14"
-  loading="lazy"
+    src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022&mapLat=36.6203&mapLon=-121.9022&zoom=14"
+    loading="lazy"
 ></iframe>
 ```
 
