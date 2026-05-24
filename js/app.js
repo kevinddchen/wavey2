@@ -3,6 +3,10 @@
 const FEET_PER_METER = 3.28084;
 const LOCAL_TIMEZONE = "America/Los_Angeles";
 
+// Marker / chart series colors
+const PRIMARY_COLOR = "#4285f4"; // blue — left-click marker + primary chart series
+const SECONDARY_COLOR = "#ffd700"; // gold — right-click marker + comparison chart series
+
 // Default view state (used when no URL params are provided)
 const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
 const DEFAULT_MARKER_LON = -121.891;
@@ -169,24 +173,23 @@ Chart.register({
     },
 });
 
-function makeChart(id, color, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
+function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
+    const dataset = (clr) => ({
+        data: [],
+        borderColor: clr,
+        backgroundColor: clr + "22",
+        fill: false,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        tension: 0.3,
+        spanGaps: false,
+    });
     const cfg = {
         type: "line",
         data: {
             labels: [],
-            datasets: [
-                {
-                    data: [],
-                    borderColor: color,
-                    backgroundColor: color + "22",
-                    fill: true,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 5,
-                    tension: 0.3,
-                    spanGaps: false,
-                },
-            ],
+            datasets: [dataset(PRIMARY_COLOR), dataset(SECONDARY_COLOR)],
         },
         options: {
             responsive: true,
@@ -255,28 +258,10 @@ function initCharts(times) {
         );
     });
 
-    function heightGradient(context, alpha) {
-        const chart = context.chart;
-        const { ctx: c, chartArea, scales } = chart;
-        if (!chartArea || !scales.x) return `rgba(74,158,218,${alpha})`;
-        const data = chart.data.datasets[0].data;
-        if (!data.length) return `rgba(74,158,218,${alpha})`;
-        const gradient = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-        const width = chartArea.right - chartArea.left;
-        data.forEach((y, i) => {
-            const t = (scales.x.getPixelForValue(i) - chartArea.left) / width;
-            const [r, g, b] = y != null && !isNaN(y) ? heightToRGB(y) : [74, 158, 218];
-            gradient.addColorStop(Math.max(0, Math.min(1, t)), `rgba(${r},${g},${b},${alpha})`);
-        });
-        return gradient;
-    }
-
-    charts.height = makeChart("chart-height", "#4a9eda", "ft", 0, null, null);
-    charts.height.data.datasets[0].borderColor = (ctx) => heightGradient(ctx, 1);
-    charts.height.data.datasets[0].backgroundColor = (ctx) => heightGradient(ctx, 0.66);
-    charts.period = makeChart("chart-period", "#a78bfa", "sec", 0, null, null);
-    charts.dir = makeChart("chart-dir", "#e07a5f", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
-    charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
+    charts.height = makeChart("chart-height", "ft", 0, null, null);
+    charts.period = makeChart("chart-period", "sec", 0, null, null);
+    charts.dir = makeChart("chart-dir", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
+    charts.tide = makeChart("chart-tide", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
@@ -313,11 +298,16 @@ function initCharts(times) {
     });
 }
 
-function updateCharts(data, gridIdx, tIdx) {
-    charts.height.data.datasets[0].data = data.wave_height[gridIdx] || [];
-    charts.period.data.datasets[0].data = (data.wave_period || [])[gridIdx] || [];
-    charts.dir.data.datasets[0].data = data.wave_dir[gridIdx] || [];
-    charts.tide.data.datasets[0].data = (data.water_level || [])[gridIdx] || [];
+function updateCharts(data, gridIdx, gridIdx2, tIdx) {
+    const apply = (chart, key) => {
+        const series = data[key] || [];
+        chart.data.datasets[0].data = gridIdx != null ? series[gridIdx] || [] : [];
+        chart.data.datasets[1].data = gridIdx2 != null ? series[gridIdx2] || [] : [];
+    };
+    apply(charts.height, "wave_height");
+    apply(charts.period, "wave_period");
+    apply(charts.dir, "wave_dir");
+    apply(charts.tide, "water_level");
     Object.values(charts).forEach((c) => {
         c._currentIdx = tIdx;
         c.update("none");
@@ -534,30 +524,50 @@ async function init() {
         chartDragging = false;
     });
 
-    // Map click → select nearest point
+    // Map click → primary marker (blue). Right-click → comparison marker (gold).
     let marker = null;
+    let marker2 = null;
     let selectedIdx = null;
+    let selectedIdx2 = null;
+
+    function makeMarker(lat, lon, color) {
+        return L.circleMarker([lat, lon], {
+            radius: 8,
+            color: "#fff",
+            fillColor: color,
+            fillOpacity: 1,
+            weight: 2,
+            pane: "markerPane",
+        });
+    }
 
     function selectPoint(lat, lon) {
         const pt = nearestPoint(grid, lat, lon);
-        if (!marker) {
-            marker = L.circleMarker([pt.lat, pt.lon], {
-                radius: 8,
-                color: "#fff",
-                fillColor: "#ffd700",
-                fillOpacity: 1,
-                weight: 2,
-                pane: "markerPane",
-            }).addTo(map);
-        } else {
-            marker.setLatLng([pt.lat, pt.lon]);
-        }
+        if (!marker) marker = makeMarker(pt.lat, pt.lon, PRIMARY_COLOR).addTo(map);
+        else marker.setLatLng([pt.lat, pt.lon]);
         document.getElementById("instructions").style.display = "none";
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
         document.getElementById("selected-info").style.display = "block";
         selectedIdx = pt.idx;
-        updateCharts(data, selectedIdx, tIdx);
+        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+    }
+
+    function selectPoint2(lat, lon) {
+        const pt = nearestPoint(grid, lat, lon);
+        if (!marker2) marker2 = makeMarker(pt.lat, pt.lon, SECONDARY_COLOR).addTo(map);
+        else marker2.setLatLng([pt.lat, pt.lon]);
+        selectedIdx2 = pt.idx;
+        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+    }
+
+    function clearComparison() {
+        if (marker2) {
+            marker2.remove();
+            marker2 = null;
+        }
+        selectedIdx2 = null;
+        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
     }
 
     function syncUrl() {
@@ -567,13 +577,16 @@ async function init() {
         });
     }
 
-    // Dive sites dropdown — pick a site to focus the marker (and pan the map) to it
+    // Dive site dropdowns — populate both selects with the same site options
     const diveSitesSelect = document.getElementById("dive-sites-select");
+    const diveSitesSelect2 = document.getElementById("dive-sites-select-2");
     DIVE_SITES.forEach((site, i) => {
-        const opt = document.createElement("option");
-        opt.value = String(i);
-        opt.textContent = site.name;
-        diveSitesSelect.appendChild(opt);
+        for (const sel of [diveSitesSelect, diveSitesSelect2]) {
+            const opt = document.createElement("option");
+            opt.value = String(i);
+            opt.textContent = site.name;
+            sel.appendChild(opt);
+        }
     });
     diveSitesSelect.addEventListener("change", () => {
         const site = DIVE_SITES[+diveSitesSelect.value];
@@ -582,6 +595,17 @@ async function init() {
         map.panTo([site.lat, site.lon]);
         syncUrl();
     });
+    diveSitesSelect2.addEventListener("change", () => {
+        const val = diveSitesSelect2.value;
+        if (val === "clear") {
+            clearComparison();
+            return;
+        }
+        const site = DIVE_SITES[+val];
+        if (!site) return;
+        selectPoint2(site.lat, site.lon);
+        // NOTE: do not pan map
+    });
 
     selectPoint(initialMarkerLat, initialMarkerLon);
 
@@ -589,6 +613,11 @@ async function init() {
         selectPoint(lat, lon);
         syncUrl();
         diveSitesSelect.value = ""; // reset to placeholder
+    });
+    map.on("contextmenu", (e) => {
+        L.DomEvent.preventDefault(e.originalEvent);
+        selectPoint2(e.latlng.lat, e.latlng.lng);
+        diveSitesSelect2.value = ""; // reset to placeholder
     });
 
     // Sidebar resizer (drag the divider to resize the sidebar)
