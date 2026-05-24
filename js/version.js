@@ -1,2 +1,2 @@
 /* exported VERSION */
-const VERSION = "0.4.0";
+const VERSION = "0.4.1";
