@@ -250,21 +250,21 @@ body.resizing {
     max-height: 160px;
 }
 
-#dive-sites ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-#dive-sites li {
-    font-size: 12px;
-    color: #8aaccc;
-    padding: 4px 6px;
+#dive-sites select {
+    width: 100%;
+    background: #0c1326;
+    color: #dde6f0;
+    border: 1px solid #1d3556;
     border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: inherit;
     cursor: pointer;
 }
-#dive-sites li:hover {
-    background: #1d3556;
-    color: #dde6f0;
+#dive-sites select:hover,
+#dive-sites select:focus {
+    outline: none;
+    border-color: #2585c4;
 }
 
 /* ── Responsive ── */

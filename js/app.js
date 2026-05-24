@@ -567,25 +567,29 @@ async function init() {
         });
     }
 
+    // Dive sites dropdown — pick a site to focus the marker (and pan the map) to it
+    const diveSitesSelect = document.getElementById("dive-sites-select");
+    DIVE_SITES.forEach((site, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = site.name;
+        diveSitesSelect.appendChild(opt);
+    });
+    diveSitesSelect.addEventListener("change", () => {
+        const site = DIVE_SITES[+diveSitesSelect.value];
+        if (!site) return;
+        selectPoint(site.lat, site.lon);
+        map.panTo([site.lat, site.lon]);
+        syncUrl();
+    });
+
     selectPoint(initialMarkerLat, initialMarkerLon);
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
         syncUrl();
+        diveSitesSelect.value = ""; // reset to placeholder
     });
-
-    // Dive sites list — click a name to focus the marker (and pan the map) to that site
-    const diveSitesList = document.querySelector("#dive-sites ul");
-    for (const site of DIVE_SITES) {
-        const li = document.createElement("li");
-        li.textContent = site.name;
-        li.addEventListener("click", () => {
-            selectPoint(site.lat, site.lon);
-            map.panTo([site.lat, site.lon]);
-            syncUrl();
-        });
-        diveSitesList.appendChild(li);
-    }
 
     // Sidebar resizer (drag the divider to resize the sidebar)
     const resizer = document.getElementById("resizer");
