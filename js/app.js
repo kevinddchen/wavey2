@@ -619,6 +619,11 @@ async function init() {
 
     selectPoint(initialMarkerLat, initialMarkerLon);
 
+    // If we fell back to the default primary site, reflect it in the dropdown
+    if (urlState.lat == null && urlState.lon == null) {
+        diveSitesSelect.value = String(DIVE_SITES.indexOf(DEFAULT_PRIMARY_SITE));
+    }
+
     // Comparison marker is only placed if both URL params are provided
     if (urlState.cmpLat != null && urlState.cmpLon != null) {
         selectPoint2(urlState.cmpLat, urlState.cmpLon);
