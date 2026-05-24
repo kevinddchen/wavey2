@@ -255,28 +255,10 @@ function initCharts(times) {
         );
     });
 
-    function heightGradient(context, alpha) {
-        const chart = context.chart;
-        const { ctx: c, chartArea, scales } = chart;
-        if (!chartArea || !scales.x) return `rgba(74,158,218,${alpha})`;
-        const data = chart.data.datasets[0].data;
-        if (!data.length) return `rgba(74,158,218,${alpha})`;
-        const gradient = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-        const width = chartArea.right - chartArea.left;
-        data.forEach((y, i) => {
-            const t = (scales.x.getPixelForValue(i) - chartArea.left) / width;
-            const [r, g, b] = y != null && !isNaN(y) ? heightToRGB(y) : [74, 158, 218];
-            gradient.addColorStop(Math.max(0, Math.min(1, t)), `rgba(${r},${g},${b},${alpha})`);
-        });
-        return gradient;
-    }
-
-    charts.height = makeChart("chart-height", "#4a9eda", "ft", 0, null, null);
-    charts.height.data.datasets[0].borderColor = (ctx) => heightGradient(ctx, 1);
-    charts.height.data.datasets[0].backgroundColor = (ctx) => heightGradient(ctx, 0.66);
-    charts.period = makeChart("chart-period", "#a78bfa", "sec", 0, null, null);
-    charts.dir = makeChart("chart-dir", "#e07a5f", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
-    charts.tide = makeChart("chart-tide", "#6bc49a", "ft", null, null, null);
+    charts.height = makeChart("chart-height", "#4285f4", "ft", 0, null, null);
+    charts.period = makeChart("chart-period", "#4285f4", "sec", 0, null, null);
+    charts.dir = makeChart("chart-dir", "#4285f4", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
+    charts.tide = makeChart("chart-tide", "#4285f4", "ft", null, null, null);
 
     Object.values(charts).forEach((c) => {
         c.options.plugins.tooltip.callbacks.title = (items) => {
@@ -544,7 +526,7 @@ async function init() {
             marker = L.circleMarker([pt.lat, pt.lon], {
                 radius: 8,
                 color: "#fff",
-                fillColor: "#ffd700",
+                fillColor: "#4285f4",
                 fillOpacity: 1,
                 weight: 2,
                 pane: "markerPane",
