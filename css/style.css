@@ -176,7 +176,6 @@ body.resizing {
 #status {
     font-size: 11px;
     color: #52718f;
-    margin-bottom: 6px;
     min-height: 14px;
 }
 
@@ -214,6 +213,7 @@ body.resizing {
 #selected-info {
     font-size: 12px;
     color: #8aaccc;
+    min-height: 16px;
 }
 
 /* ── GitHub link ── */

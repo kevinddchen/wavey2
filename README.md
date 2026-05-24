@@ -10,16 +10,16 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 
 ## Features
 
-- Interactive map with a wave height heatmap overlay
+- Interactive map with a wave-height heatmap overlay
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
     - Wave height
     - Wave period
     - Wave direction
     - Water level / tide
-- **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the primary (blue) series
+- **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the blue (primary) series
 - **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
-- URL parameters (`lat`, `lon`) capture the primary marker location so you can bookmark or share a link to a specific dive site
+- URL parameters (`lat`, `lon`) capture the blue (primary) marker location so you can bookmark or share a link to a specific dive site
 
 ## Embedding on another site
 

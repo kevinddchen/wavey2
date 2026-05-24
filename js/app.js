@@ -550,7 +550,6 @@ async function init() {
         else marker.setLatLng([pt.lat, pt.lon]);
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
-        document.getElementById("selected-info").style.display = "block";
         selectedIdx = pt.idx;
         updateCharts(data, selectedIdx, selectedIdx2, tIdx);
     }
