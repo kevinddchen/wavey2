@@ -249,6 +249,9 @@ body.resizing {
 .chart-container canvas {
     max-height: 160px;
 }
+#chart-height {
+    max-height: 220px;
+}
 
 #dive-sites {
     display: flex;
