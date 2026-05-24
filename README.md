@@ -19,7 +19,17 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
     - Water level / tide
 - **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the blue (primary) series
 - **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
-- URL parameters (`lat`, `lon`) capture the blue (primary) marker location so you can bookmark or share a link to a specific dive site
+
+### URL parameters
+
+The current marker positions are encoded in the URL so you can bookmark or share a link to a specific view:
+
+| Parameter | Description                               |
+| --------- | ----------------------------------------- |
+| `lat`     | Latitude of the blue (primary) marker     |
+| `lon`     | Longitude of the blue (primary) marker    |
+| `cmpLat`  | Latitude of the gold (comparison) marker  |
+| `cmpLon`  | Longitude of the gold (comparison) marker |
 
 ## Embedding on another site
 

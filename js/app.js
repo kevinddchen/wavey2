@@ -7,16 +7,17 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 const PRIMARY_COLOR = "#4285f4"; // blue — left-click marker + primary chart series
 const SECONDARY_COLOR = "#ffd700"; // gold — right-click marker + comparison chart series
 
-// Default view state (used when no URL params are provided)
-const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
-const DEFAULT_MARKER_LON = -121.891;
+// Dive sites — one constant per site, then the list and defaults reference them
+const SITE_BREAKWATER = { name: "Breakwater", lat: 36.6113, lon: -121.891 };
+const SITE_MCABEE = { name: "McAbee", lat: 36.6158, lon: -121.8966 };
+const SITE_LOVERS_POINT = { name: "Lovers Point", lat: 36.6249, lon: -121.9135 };
+const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.9303 };
 
-const DIVE_SITES = [
-    { name: "Breakwater", lat: 36.6113, lon: -121.891 },
-    { name: "McAbee", lat: 36.6158, lon: -121.8966 },
-    { name: "Lovers Point", lat: 36.6249, lon: -121.9135 },
-    { name: "Monastery", lat: 36.5254, lon: -121.9303 },
-];
+const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONASTERY];
+
+// Default primary marker (used when no `lat`/`lon` URL params are provided).
+// The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
+const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
 
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
@@ -420,10 +421,12 @@ function readUrlState() {
     return {
         lat: num("lat"),
         lon: num("lon"),
+        cmpLat: num("cmpLat"),
+        cmpLon: num("cmpLon"),
     };
 }
 
-function writeUrlState({ lat, lon }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -431,6 +434,8 @@ function writeUrlState({ lat, lon }) {
     };
     set("lat", lat, 4);
     set("lon", lon, 4);
+    set("cmpLat", cmpLat, 4);
+    set("cmpLon", cmpLon, 4);
     const qs = p.toString();
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
 }
@@ -452,8 +457,8 @@ async function init() {
     if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
     // Map — centers on the initial marker location
-    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
-    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_MARKER_LON;
+    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
+    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
     const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], 11);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
@@ -575,6 +580,8 @@ async function init() {
         writeUrlState({
             lat: marker ? marker.getLatLng().lat : null,
             lon: marker ? marker.getLatLng().lng : null,
+            cmpLat: marker2 ? marker2.getLatLng().lat : null,
+            cmpLon: marker2 ? marker2.getLatLng().lng : null,
         });
     }
 
@@ -600,15 +607,27 @@ async function init() {
         const val = diveSitesSelect2.value;
         if (val === "clear") {
             clearComparison();
+            syncUrl();
             return;
         }
         const site = DIVE_SITES[+val];
         if (!site) return;
         selectPoint2(site.lat, site.lon);
         // NOTE: do not pan map
+        syncUrl();
     });
 
     selectPoint(initialMarkerLat, initialMarkerLon);
+
+    // If we fell back to the default primary site, reflect it in the dropdown
+    if (urlState.lat == null && urlState.lon == null) {
+        diveSitesSelect.value = String(DIVE_SITES.indexOf(DEFAULT_PRIMARY_SITE));
+    }
+
+    // Comparison marker is only placed if both URL params are provided
+    if (urlState.cmpLat != null && urlState.cmpLon != null) {
+        selectPoint2(urlState.cmpLat, urlState.cmpLon);
+    }
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
@@ -618,6 +637,7 @@ async function init() {
     map.on("contextmenu", (e) => {
         L.DomEvent.preventDefault(e.originalEvent);
         selectPoint2(e.latlng.lat, e.latlng.lng);
+        syncUrl();
         diveSitesSelect2.value = ""; // reset to placeholder
     });
 
