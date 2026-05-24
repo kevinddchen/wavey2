@@ -15,9 +15,9 @@ const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.9303 };
 
 const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONASTERY];
 
-// Default markers (used when no URL params are provided)
+// Default primary marker (used when no `lat`/`lon` URL params are provided).
+// The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
 const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
-const DEFAULT_SECONDARY_SITE = SITE_MONASTERY;
 
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
@@ -619,9 +619,10 @@ async function init() {
 
     selectPoint(initialMarkerLat, initialMarkerLon);
 
-    const initialCmpLat = urlState.cmpLat != null ? urlState.cmpLat : DEFAULT_SECONDARY_SITE.lat;
-    const initialCmpLon = urlState.cmpLon != null ? urlState.cmpLon : DEFAULT_SECONDARY_SITE.lon;
-    selectPoint2(initialCmpLat, initialCmpLon);
+    // Comparison marker is only placed if both URL params are provided
+    if (urlState.cmpLat != null && urlState.cmpLon != null) {
+        selectPoint2(urlState.cmpLat, urlState.cmpLon);
+    }
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
