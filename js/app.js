@@ -6,8 +6,6 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 // Default view state (used when no URL params are provided)
 const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
 const DEFAULT_MARKER_LON = -121.891;
-const DEFAULT_MAP_LAT = 36.6;
-const DEFAULT_MAP_LON = -121.95;
 const DEFAULT_ZOOM = 11;
 
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
@@ -426,13 +424,10 @@ function readUrlState() {
     return {
         lat: num("lat"),
         lon: num("lon"),
-        mapLat: num("mapLat"),
-        mapLon: num("mapLon"),
-        zoom: num("zoom"),
     };
 }
 
-function writeUrlState({ lat, lon, mapLat, mapLon, zoom }) {
+function writeUrlState({ lat, lon }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -440,9 +435,6 @@ function writeUrlState({ lat, lon, mapLat, mapLon, zoom }) {
     };
     set("lat", lat, 4);
     set("lon", lon, 4);
-    set("mapLat", mapLat, 4);
-    set("mapLon", mapLon, 4);
-    set("zoom", zoom);
     const qs = p.toString();
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
 }
@@ -463,13 +455,10 @@ async function init() {
         `${data.metadata.source} · ${nt} time steps · ${grid.nx}×${grid.ny} grid`;
     if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
-    // Map
-    const initialCenter =
-        urlState.mapLat != null && urlState.mapLon != null
-            ? [urlState.mapLat, urlState.mapLon]
-            : [DEFAULT_MAP_LAT, DEFAULT_MAP_LON];
-    const initialZoom = urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM;
-    const map = L.map("map").setView(initialCenter, initialZoom);
+    // Map — centers on the initial marker location
+    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
+    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_MARKER_LON;
+    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], DEFAULT_ZOOM);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18,
@@ -566,26 +555,18 @@ async function init() {
     }
 
     function syncUrl() {
-        const c = map.getCenter();
         writeUrlState({
             lat: marker ? marker.getLatLng().lat : null,
             lon: marker ? marker.getLatLng().lng : null,
-            mapLat: c.lat,
-            mapLon: c.lng,
-            zoom: map.getZoom(),
         });
     }
 
-    // Initial marker: URL params, else default
-    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
-    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_MARKER_LON;
     selectPoint(initialMarkerLat, initialMarkerLon);
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
         syncUrl();
     });
-    map.on("moveend", syncUrl);
 
     // Sidebar resizer (drag the divider to resize the sidebar)
     const resizer = document.getElementById("resizer");

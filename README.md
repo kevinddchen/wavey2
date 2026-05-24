@@ -18,7 +18,7 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
     - Wave direction
     - Water level / tide
 - A cursor on the charts tracks the currently selected time step
-- URL parameters (`lat`, `lon`, `mapLat`, `mapLon`, `zoom`) capture the current view so you can bookmark or share a link to a specific location
+- URL parameters (`lat`, `lon`) capture the marker location so you can bookmark or share a link to a specific dive site
 
 ## Embedding on another site
 
@@ -31,10 +31,7 @@ The page can be embedded via `<iframe>`. A minimal example:
 Use the URL parameters above to deep-link to a specific location. For example, to open with the marker on Lovers Point:
 
 ```html
-<iframe
-    src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022&mapLat=36.6203&mapLon=-121.9022&zoom=14"
-    loading="lazy"
-></iframe>
+<iframe src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022" loading="lazy"></iframe>
 ```
 
 ## NOAA Nearshore Wave Prediction System
