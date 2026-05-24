@@ -103,12 +103,48 @@ function nearestPoint(grid, lat, lon) {
 
 async function loadData() {
     try {
-        const r = await fetch("data/waves.json");
+        const r = await fetch("data/waves.bin.gz");
         if (!r.ok) throw new Error();
-        return await r.json();
+        // Pre-gzipped so the wire transfer stays small even when the host
+        // doesn't auto-compress application/octet-stream (e.g. GitHub Pages).
+        const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
+        const buf = await new Response(decompressed).arrayBuffer();
+        return decodeBinary(buf);
     } catch {
         return generateEmptyData();
     }
+}
+
+// Binary format: [u32 LE header_len][JSON header][int16 LE arrays...]
+// See scripts/grib2bin.py for the writer.
+function decodeBinary(buf) {
+    const view = new DataView(buf);
+    const headerLen = view.getUint32(0, true);
+    const headerStr = new TextDecoder().decode(new Uint8Array(buf, 4, headerLen));
+    const header = JSON.parse(headerStr);
+    const { metadata, ncells, nt, variables } = header;
+
+    let byteOffset = 4 + headerLen; // 4-byte aligned by header padding
+    const data = { metadata };
+    for (const v of variables) {
+        const count = ncells * nt;
+        const raw = new Int16Array(buf, byteOffset, count);
+        byteOffset += count * 2;
+
+        const { scale, offset: valOffset, sentinel } = v;
+        const series = new Array(ncells);
+        for (let c = 0; c < ncells; c++) {
+            const row = new Array(nt);
+            const base = c * nt;
+            for (let t = 0; t < nt; t++) {
+                const x = raw[base + t];
+                row[t] = x === sentinel ? null : x / scale + valOffset;
+            }
+            series[c] = row;
+        }
+        data[v.name] = series;
+    }
+    return data;
 }
 
 function generateEmptyData() {

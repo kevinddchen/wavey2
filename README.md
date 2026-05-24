@@ -67,29 +67,22 @@ uv sync --no-dev
 uv run python scripts/download_latest_grib.py
 ```
 
-### Convert data to JSON
+### Convert data to binary
 
 ```bash
-uv run python scripts/grib2json.py YOUR_FILE.grib2
+uv run python scripts/grib2bin.py YOUR_FILE.grib2
 ```
 
-This creates a file `data/waves.json` that contains a regular lat/lon grid with time-series arrays at each grid point:
+This creates a file `data/waves.bin.gz`. The uncompressed payload has the layout:
 
-```json
-{
-  "metadata": {
-    "source": "NOAA NWPS – mtr_nwps_CG3_20260430_1200.grib2",
-    "forecast_time": "2026-04-30T12:00:00Z",
-    "times": ["2026-04-30T13:00:00Z", "..."],
-    "grid": { "nx": 90, "ny": 178, "lat_min": 36.2, "lat_max": 37.0, "lon_min": -122.2, "lon_max": -121.7 },
-    "units": { "wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m" }
-  },
-  "wave_height":  [[t0, t1, ...], ...],  // [ny×nx grid points][time steps]
-  "wave_dir":     [[t0, t1, ...], ...],
-  "wave_period":  [[t0, t1, ...], ...],
-  "water_level":  [[t0, t1, ...], ...]
-}
 ```
+[4 bytes : LE u32]    header byte length (includes padding)
+[N bytes : UTF-8]     JSON header (padded so the payload is 4-byte aligned)
+[binary  : LE int16]  one ncells×nt array per variable, in `header.variables` order
+                      (cell-major, time-minor); INT16_MIN (-32768) means null
+```
+
+The whole file is gzipped on disk so the wire transfer stays small even when the host doesn't auto-compress `application/octet-stream` (e.g. GitHub Pages). The JSON header contains the metadata (source, forecast_time, times, grid, units) plus per-variable `scale`/`offset` for dequantization: `real_value = int_value / scale + offset`. See `scripts/grib2bin.py` for the writer and `js/app.js` (`decodeBinary`) for the reader.
 
 Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 
@@ -99,7 +92,7 @@ Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 uv run python -m http.server 8000 & open http://localhost:8000
 ```
 
-A plain file server is required because the page uses `fetch()` to load `data/waves.json`, which browsers block over `file://` URLs.
+A plain file server is required because the page uses `fetch()` to load `data/waves.bin.gz`, which browsers block over `file://` URLs.
 
 ## Hosting on GitHub Pages
 

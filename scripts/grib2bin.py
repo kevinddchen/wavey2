@@ -1,18 +1,33 @@
 """
-Convert an NWPS GRIB2 file to waves.json for the dive-conditions viewer.
+Convert an NWPS GRIB2 file to waves.bin.gz for the dive-conditions viewer.
+
+Output format (gzip-compressed)
+-------------------------------
+  [4 bytes : little-endian u32]     header byte length (includes padding)
+  [N bytes : UTF-8 JSON]            header (padded with spaces so the binary
+                                    payload starts on a 4-byte boundary)
+  [binary  : little-endian int16]   one array per variable, in `header.variables`
+                                    order, each of length ncells * nt (cell-major,
+                                    time-minor); INT16_MIN (-32768) means null.
+
+The whole stream is wrapped in gzip on disk (`waves.bin.gz`) because GitHub
+Pages doesn't auto-compress `application/octet-stream`; the browser
+decompresses it via `DecompressionStream` before decoding.
+
+Real values are recovered as `int_value / scale + offset` (scale/offset live in
+the header per variable).
 
 Quick start
 -----------
-  # 1. List what variables are in the file
-  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2 --list
-
-  # 2. Convert
-  python grib2json.py mtr_nwps_CG3_20260430_1200.grib2
+  python grib2bin.py mtr_nwps_CG3_20260430_1200.grib2 --list
+  python grib2bin.py mtr_nwps_CG3_20260430_1200.grib2
 
 """
 
 import argparse
+import gzip
 import json
+import struct
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +41,24 @@ HEIGHT_NAME = "swh"
 DIR_NAME = "dirpw"
 PERIOD_NAME = "perpw"
 LEVEL_NAME = "zos"
+
+# ── Binary format ────────────────────────────────────────────────────────────
+
+SENTINEL = -32768  # INT16_MIN — reserved for null
+INT16_MAX = 32767
+
+# Per-variable quantization. Scale is integer counts per unit; precision is 1/scale.
+# Ranges chosen to comfortably fit observed values within int16 (±32767).
+#   wave_height (m): 0–327 m at 0.01 m precision
+#   wave_dir    (°): 0–360 ° at 1 ° precision
+#   wave_period (s): 0–327 s at 0.01 s precision
+#   water_level (m): ±327 m at 0.01 m precision
+QUANT: dict[str, dict[str, float]] = {
+    "wave_height": {"scale": 100, "offset": 0.0},
+    "wave_dir": {"scale": 1, "offset": 0.0},
+    "wave_period": {"scale": 100, "offset": 0.0},
+    "water_level": {"scale": 100, "offset": 0.0},
+}
 
 # ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -150,20 +183,56 @@ def extract(
     return times_iso, lat, lon, data, ref_time_iso
 
 
-def to_grid_list(arr: npt.NDArray[Any], ndecimals: int) -> list[list[float | None]]:
-    """[nt,ny,nx] → list[ny*nx] of list[nt] values; NaN/Inf → null."""
+def quantize_int16(arr: npt.NDArray[Any], scale: float, offset: float) -> npt.NDArray[np.int16]:
+    """[nt,ny,nx] → int16 [ny*nx, nt]; NaN/Inf → SENTINEL, out-of-range clipped."""
     nt, ny, nx = arr.shape
-    out: list[list[float | None]] = []
-    for y in range(ny):
-        for x in range(nx):
-            row: list[float | None] = []
-            for v in arr[:, y, x]:
-                if np.isnan(v) or np.isinf(v):
-                    row.append(None)
-                else:
-                    row.append(round(float(v), ndecimals))
-            out.append(row)
-    return out
+    # Cell-major, time-minor: result[y*nx + x, t] = arr[t, y, x]
+    flat = np.transpose(arr, (1, 2, 0)).reshape(ny * nx, nt)
+    nan_mask = ~np.isfinite(flat)
+    q = np.where(nan_mask, 0.0, np.round((flat - offset) * scale))
+    np.clip(q, SENTINEL + 1, INT16_MAX, out=q)
+    q[nan_mask] = SENTINEL
+    return q.astype(np.int16)
+
+
+def write_binary(
+    out_path: Path,
+    metadata: dict[str, Any],
+    arrays: list[tuple[str, npt.NDArray[np.int16]]],
+) -> None:
+    """Write [u32 header_len][JSON header][int16 arrays], gzip-compressed."""
+    ncells, nt = arrays[0][1].shape
+    for name, arr in arrays:
+        assert arr.dtype == np.int16, f"{name} must be int16, got {arr.dtype}"
+        assert arr.shape == (ncells, nt), f"{name} shape mismatch: {arr.shape}"
+
+    header = {
+        "version": 1,
+        "metadata": metadata,
+        "ncells": int(ncells),
+        "nt": int(nt),
+        "variables": [
+            {
+                "name": name,
+                "dtype": "int16",
+                "scale": QUANT[name]["scale"],
+                "offset": QUANT[name]["offset"],
+                "sentinel": SENTINEL,
+            }
+            for name, _ in arrays
+        ],
+    }
+
+    header_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    # Pad so the binary payload starts on a 4-byte boundary
+    pad = (-len(header_bytes)) % 4
+    header_bytes += b" " * pad
+
+    with gzip.open(out_path, "wb", compresslevel=9) as f:
+        f.write(struct.pack("<I", len(header_bytes)))
+        f.write(header_bytes)
+        for _, arr in arrays:
+            f.write(arr.astype("<i2", copy=False).tobytes())
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -172,16 +241,14 @@ def to_grid_list(arr: npt.NDArray[Any], ndecimals: int) -> list[list[float | Non
 def main() -> None:
     # fmt: off
     ap = argparse.ArgumentParser(
-        description="Convert NWPS GRIB2 → waves.json for the dive conditions viewer.",
+        description="Convert NWPS GRIB2 → waves.bin for the dive conditions viewer.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("input", help="Input .grib2 file")
     ap.add_argument("--list", action="store_true",
                     help="List available variables and exit")
-    ap.add_argument("--out", default="data/waves.json",
-                    help="Output path (default: data/waves.json)")
-    ap.add_argument("--round", type=int, default=2, metavar="N",
-                    help="Decimal places to round values to (default: 2)")
+    ap.add_argument("--out", default="data/waves.bin.gz",
+                    help="Output path (default: data/waves.bin.gz)")
     ap.add_argument("--step", type=int, default=1, metavar="N",
                     help="Keep every Nth time step, e.g. --step 3 for 3-hourly (default: 1)")
     args = ap.parse_args()
@@ -235,39 +302,41 @@ def main() -> None:
         "lon_max": float(lons[-1]),
     }
 
-    out: dict[str, Any] = {
-        "metadata": {
-            "source": f"NOAA NWPS – {path.name}",
-            "forecast_time": ref_time or times_iso[0],
-            "times": times_iso,
-            "grid": grid,
-            "units": {"wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m"},
-        },
-        "wave_height": to_grid_list(arr_h, args.round),
+    metadata: dict[str, Any] = {
+        "source": f"NOAA NWPS – {path.name}",
+        "forecast_time": ref_time or times_iso[0],
+        "times": times_iso,
+        "grid": grid,
+        "units": {"wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m"},
     }
+
+    arrays: list[tuple[str, npt.NDArray[np.int16]]] = []
+    arrays.append(("wave_height", quantize_int16(arr_h, **QUANT["wave_height"])))
 
     if msgs_d:
         _, _, _, arr_d, _ = extract(msgs_d)
-        out["wave_dir"] = to_grid_list(arr_d[:: args.step], 0)
+        arr_d = arr_d[:: args.step]
+        arrays.append(("wave_dir", quantize_int16(arr_d, **QUANT["wave_dir"])))
     else:
-        out["wave_dir"] = [[None] * nt] * (ny * nx)
+        arrays.append(("wave_dir", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
 
     if msgs_p:
         _, _, _, arr_p, _ = extract(msgs_p)
-        out["wave_period"] = to_grid_list(arr_p[:: args.step], args.round)
+        arr_p = arr_p[:: args.step]
+        arrays.append(("wave_period", quantize_int16(arr_p, **QUANT["wave_period"])))
     else:
-        out["wave_period"] = None
+        arrays.append(("wave_period", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
 
     if msgs_l:
         _, _, _, arr_l, _ = extract(msgs_l)
-        out["water_level"] = to_grid_list(arr_l[:: args.step], args.round)
+        arr_l = arr_l[:: args.step]
+        arrays.append(("water_level", quantize_int16(arr_l, **QUANT["water_level"])))
     else:
-        out["water_level"] = None
+        arrays.append(("water_level", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(out, f, separators=(",", ":"))
+    write_binary(out_path, metadata, arrays)
 
     size_mb = out_path.stat().st_size / 1e6
     print(f"\nWrote {out_path}  ({size_mb:.1f} MB)")
