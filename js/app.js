@@ -466,6 +466,9 @@ async function init() {
     const heatLayer = L.imageOverlay("", mapBounds, { opacity: 0.8, interactive: false }).addTo(map);
     const drawArrows = initArrowOverlay(map, grid, data);
 
+    // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
+    map.createPane("primaryMarkerPane").style.zIndex = 700;
+
     // Time control
     const slider = document.getElementById("time-slider");
     const timeLabel = document.getElementById("time-label");
@@ -530,25 +533,23 @@ async function init() {
     let selectedIdx = null;
     let selectedIdx2 = null;
 
-    function makeMarker(lat, lon, color) {
+    function makeMarker(lat, lon, color, pane = "markerPane") {
         return L.circleMarker([lat, lon], {
             radius: 8,
             color: "#fff",
             fillColor: color,
             fillOpacity: 1,
             weight: 2,
-            pane: "markerPane",
+            pane,
         });
     }
 
     function selectPoint(lat, lon) {
         const pt = nearestPoint(grid, lat, lon);
-        if (!marker) marker = makeMarker(pt.lat, pt.lon, PRIMARY_COLOR).addTo(map);
+        if (!marker) marker = makeMarker(pt.lat, pt.lon, PRIMARY_COLOR, "primaryMarkerPane").addTo(map);
         else marker.setLatLng([pt.lat, pt.lon]);
-        document.getElementById("instructions").style.display = "none";
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
-        document.getElementById("selected-info").style.display = "block";
         selectedIdx = pt.idx;
         updateCharts(data, selectedIdx, selectedIdx2, tIdx);
     }

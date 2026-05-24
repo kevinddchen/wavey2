@@ -32,14 +32,13 @@
         <div id="info-panel">
           <h1>Monterey Bay Dive Conditions</h1>
           <p id="status"></p>
-          <div id="demo-banner" style="display: none">
-            &#9888; No data &mdash; run
-            <code>scripts/grib2json.py</code> to generate data
-          </div>
-          <p id="instructions">Click the map to view conditions at a location.</p>
-          <div id="selected-info" style="display: none">
+          <div id="selected-info">
             <span id="selected-coords"></span>
           </div>
+          <p id="instructions">
+            <span class="dot primary">&#9679;</span> Left-click: primary &middot;
+            <span class="dot comparison">&#9679;</span> Right-click: comparison
+          </p>
         </div>
 
         <div id="charts-panel">
