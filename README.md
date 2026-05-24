@@ -78,11 +78,15 @@ This creates a file `data/waves.bin.gz`. The uncompressed payload has the layout
 ```
 [4 bytes : LE u32]    header byte length (includes padding)
 [N bytes : UTF-8]     JSON header (padded so the payload is 4-byte aligned)
-[binary  : LE int16]  one ncells×nt array per variable, in `header.variables` order
-                      (cell-major, time-minor); INT16_MIN (-32768) means null
+[binary  : LE typed]  one ncells×nt array per variable, in `header.variables` order
+                      (cell-major, time-minor); dtype/sentinel are declared per
+                      variable in the header (currently uint8/int8, sentinel = the
+                      most-extreme representable value)
 ```
 
-The whole file is gzipped on disk so the wire transfer stays small even when the host doesn't auto-compress `application/octet-stream` (e.g. GitHub Pages). The JSON header contains the metadata (source, forecast_time, times, grid, units) plus per-variable `scale`/`offset` for dequantization: `real_value = int_value / scale + offset`. See `scripts/grib2bin.py` for the writer and `js/app.js` (`decodeBinary`) for the reader.
+The whole file is gzipped on disk so the wire transfer stays small.
+The JSON header contains the metadata (source, forecast_time, times, grid, units) plus per-variable `scale`/`offset` for dequantization: `real_value = int_value / scale + offset`.
+See `scripts/grib2bin.py` for the writer and `js/app.js` (`decodeBinary`) for the reader.
 
 Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 

@@ -115,8 +115,14 @@ async function loadData() {
     }
 }
 
-// Binary format: [u32 LE header_len][JSON header][int16 LE arrays...]
+// Binary format: [u32 LE header_len][JSON header][typed LE arrays...]
 // See scripts/grib2bin.py for the writer.
+const DTYPE_VIEW = {
+    uint8: { ctor: Uint8Array, bytes: 1 },
+    int8: { ctor: Int8Array, bytes: 1 },
+    int16: { ctor: Int16Array, bytes: 2 },
+};
+
 function decodeBinary(buf) {
     const view = new DataView(buf);
     const headerLen = view.getUint32(0, true);
@@ -127,9 +133,11 @@ function decodeBinary(buf) {
     let byteOffset = 4 + headerLen; // 4-byte aligned by header padding
     const data = { metadata };
     for (const v of variables) {
+        const info = DTYPE_VIEW[v.dtype];
+        if (!info) throw new Error("unsupported dtype: " + v.dtype);
         const count = ncells * nt;
-        const raw = new Int16Array(buf, byteOffset, count);
-        byteOffset += count * 2;
+        const raw = new info.ctor(buf, byteOffset, count);
+        byteOffset += count * info.bytes;
 
         const { scale, offset: valOffset, sentinel } = v;
         const series = new Array(ncells);

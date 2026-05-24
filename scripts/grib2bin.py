@@ -6,16 +6,51 @@ Output format (gzip-compressed)
   [4 bytes : little-endian u32]     header byte length (includes padding)
   [N bytes : UTF-8 JSON]            header (padded with spaces so the binary
                                     payload starts on a 4-byte boundary)
-  [binary  : little-endian int16]   one array per variable, in `header.variables`
-                                    order, each of length ncells * nt (cell-major,
-                                    time-minor); INT16_MIN (-32768) means null.
+  [binary  : little-endian typed]   one array per variable, in `header.variables`
+                                    order, each of length `ncells * nt`. Layout
+                                    is cell-major / time-minor: the value at
+                                    cell `c`, time `t` is at index `c * nt + t`.
+                                    dtype and sentinel value are declared per
+                                    variable in the header.
 
 The whole stream is wrapped in gzip on disk (`waves.bin.gz`) because GitHub
 Pages doesn't auto-compress `application/octet-stream`; the browser
 decompresses it via `DecompressionStream` before decoding.
 
-Real values are recovered as `int_value / scale + offset` (scale/offset live in
-the header per variable).
+JSON header schema
+------------------
+  {
+    "version": 1,                    // bump when the layout changes
+    "metadata": {
+      "source":        "NOAA NWPS – mtr_nwps_CG3_YYYYMMDD_HH00.grib2",
+      "forecast_time": "YYYY-MM-DDTHH:MM:SSZ",   // GRIB2 analysis time (UTC)
+      "times":         ["YYYY-MM-DDTHH:MM:SSZ", ...],  // one per timestep, length = nt
+      "grid":          { "nx": int, "ny": int,
+                         "lat_min": float, "lat_max": float,
+                         "lon_min": float, "lon_max": float },
+      "units":         { "wave_height": "m", "wave_dir": "°",
+                         "wave_period": "s", "water_level": "m" }
+    },
+    "ncells": int,                   // = grid.nx * grid.ny
+    "nt":     int,                   // number of timesteps (= len(metadata.times))
+    "variables": [
+      // One entry per binary array, in the order they appear in the payload.
+      // `dtype` is one of "uint8" | "int8" | "int16" (see DTYPE_INFO below);
+      // `sentinel` is the encoded value that means "null" (no data — e.g. land
+      // cells for wave fields). Real value is recovered as:
+      //     real = int_value / scale + offset       (when int_value != sentinel)
+      { "name":     "wave_height",
+        "dtype":    "uint8",
+        "scale":    32,              // step = 1/scale in the variable's units
+        "offset":   0.0,
+        "sentinel": 255 },
+      { "name": "wave_dir",    "dtype": "uint8", "scale": 0.5, "offset": 0.0, "sentinel": 255  },
+      { "name": "wave_period", "dtype": "uint8", "scale": 8,   "offset": 0.0, "sentinel": 255  },
+      { "name": "water_level", "dtype": "int8",  "scale": 40,  "offset": 0.0, "sentinel": -128 }
+    ]
+  }
+
+The reader is `decodeBinary` in `js/app.js`.
 
 Quick start
 -----------
@@ -44,20 +79,28 @@ LEVEL_NAME = "zos"
 
 # ── Binary format ────────────────────────────────────────────────────────────
 
-SENTINEL = -32768  # INT16_MIN — reserved for null
-INT16_MAX = 32767
+# Per-dtype encoding range (sentinel is the most-negative or most-positive value).
+#   uint8: usable 0..254, sentinel = 255
+#   int8:  usable -127..127, sentinel = -128
+#   int16: usable -32767..32767, sentinel = -32768
+DTYPE_INFO: dict[str, dict[str, Any]] = {
+    "uint8": {"np": np.uint8, "lo": 0, "hi": 254, "sentinel": 255, "bytes": 1, "endian": "u1"},
+    "int8": {"np": np.int8, "lo": -127, "hi": 127, "sentinel": -128, "bytes": 1, "endian": "i1"},
+    "int16": {"np": np.int16, "lo": -32767, "hi": 32767, "sentinel": -32768, "bytes": 2, "endian": "<i2"},
+}
 
-# Per-variable quantization. Scale is integer counts per unit; precision is 1/scale.
-# Ranges chosen to comfortably fit observed values within int16 (±32767).
-#   wave_height (m): 0–327 m at 0.01 m precision
-#   wave_dir    (°): 0–360 ° at 1 ° precision
-#   wave_period (s): 0–327 s at 0.01 s precision
-#   water_level (m): ±327 m at 0.01 m precision
-QUANT: dict[str, dict[str, float]] = {
-    "wave_height": {"scale": 100, "offset": 0.0},
-    "wave_dir": {"scale": 1, "offset": 0.0},
-    "wave_period": {"scale": 100, "offset": 0.0},
-    "water_level": {"scale": 100, "offset": 0.0},
+# Per-variable quantization. `real_value = int_value / scale + offset`. Choose
+# `scale` so that the encoded range covers the physically plausible span; values
+# outside that span get clipped (rare for wave/tide fields).
+#   wave_height: 0–7.9375 m   step 1/32 m  (3.125 cm)
+#   wave_dir   : 0–360 °      step 1/0.5 ° (2 °)
+#   wave_period: 0–31.75 s    step 1/8 s   (0.125 s)
+#   water_level: ±3.175 m     step 1/40 m  (2.5 cm)
+QUANT: dict[str, dict[str, Any]] = {
+    "wave_height": {"dtype": "uint8", "scale": 32, "offset": 0.0},
+    "wave_dir": {"dtype": "uint8", "scale": 0.5, "offset": 0.0},
+    "wave_period": {"dtype": "uint8", "scale": 8, "offset": 0.0},
+    "water_level": {"dtype": "int8", "scale": 40, "offset": 0.0},
 }
 
 # ── Types ─────────────────────────────────────────────────────────────────────
@@ -183,27 +226,27 @@ def extract(
     return times_iso, lat, lon, data, ref_time_iso
 
 
-def quantize_int16(arr: npt.NDArray[Any], scale: float, offset: float) -> npt.NDArray[np.int16]:
-    """[nt,ny,nx] → int16 [ny*nx, nt]; NaN/Inf → SENTINEL, out-of-range clipped."""
+def quantize(arr: npt.NDArray[Any], dtype: str, scale: float, offset: float) -> npt.NDArray[Any]:
+    """[nt,ny,nx] → typed [ny*nx, nt]; NaN/Inf → sentinel, out-of-range clipped."""
+    info = DTYPE_INFO[dtype]
     nt, ny, nx = arr.shape
     # Cell-major, time-minor: result[y*nx + x, t] = arr[t, y, x]
     flat = np.transpose(arr, (1, 2, 0)).reshape(ny * nx, nt)
     nan_mask = ~np.isfinite(flat)
     q = np.where(nan_mask, 0.0, np.round((flat - offset) * scale))
-    np.clip(q, SENTINEL + 1, INT16_MAX, out=q)
-    q[nan_mask] = SENTINEL
-    return q.astype(np.int16)
+    np.clip(q, info["lo"], info["hi"], out=q)
+    q[nan_mask] = info["sentinel"]
+    return q.astype(info["np"])  # type: ignore[no-any-return]
 
 
 def write_binary(
     out_path: Path,
     metadata: dict[str, Any],
-    arrays: list[tuple[str, npt.NDArray[np.int16]]],
+    arrays: list[tuple[str, npt.NDArray[Any]]],
 ) -> None:
-    """Write [u32 header_len][JSON header][int16 arrays], gzip-compressed."""
+    """Write [u32 header_len][JSON header][quantized arrays], gzip-compressed."""
     ncells, nt = arrays[0][1].shape
     for name, arr in arrays:
-        assert arr.dtype == np.int16, f"{name} must be int16, got {arr.dtype}"
         assert arr.shape == (ncells, nt), f"{name} shape mismatch: {arr.shape}"
 
     header = {
@@ -214,10 +257,10 @@ def write_binary(
         "variables": [
             {
                 "name": name,
-                "dtype": "int16",
+                "dtype": QUANT[name]["dtype"],
                 "scale": QUANT[name]["scale"],
                 "offset": QUANT[name]["offset"],
-                "sentinel": SENTINEL,
+                "sentinel": DTYPE_INFO[QUANT[name]["dtype"]]["sentinel"],
             }
             for name, _ in arrays
         ],
@@ -231,8 +274,9 @@ def write_binary(
     with gzip.open(out_path, "wb", compresslevel=9) as f:
         f.write(struct.pack("<I", len(header_bytes)))
         f.write(header_bytes)
-        for _, arr in arrays:
-            f.write(arr.astype("<i2", copy=False).tobytes())
+        for name, arr in arrays:
+            endian = DTYPE_INFO[QUANT[name]["dtype"]]["endian"]
+            f.write(arr.astype(endian, copy=False).tobytes())
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -310,29 +354,33 @@ def main() -> None:
         "units": {"wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m"},
     }
 
-    arrays: list[tuple[str, npt.NDArray[np.int16]]] = []
-    arrays.append(("wave_height", quantize_int16(arr_h, **QUANT["wave_height"])))
+    def empty(name: str) -> npt.NDArray[Any]:
+        info = DTYPE_INFO[QUANT[name]["dtype"]]
+        return np.full((ny * nx, nt), info["sentinel"], dtype=info["np"])
+
+    arrays: list[tuple[str, npt.NDArray[Any]]] = []
+    arrays.append(("wave_height", quantize(arr_h, **QUANT["wave_height"])))
 
     if msgs_d:
         _, _, _, arr_d, _ = extract(msgs_d)
         arr_d = arr_d[:: args.step]
-        arrays.append(("wave_dir", quantize_int16(arr_d, **QUANT["wave_dir"])))
+        arrays.append(("wave_dir", quantize(arr_d, **QUANT["wave_dir"])))
     else:
-        arrays.append(("wave_dir", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
+        arrays.append(("wave_dir", empty("wave_dir")))
 
     if msgs_p:
         _, _, _, arr_p, _ = extract(msgs_p)
         arr_p = arr_p[:: args.step]
-        arrays.append(("wave_period", quantize_int16(arr_p, **QUANT["wave_period"])))
+        arrays.append(("wave_period", quantize(arr_p, **QUANT["wave_period"])))
     else:
-        arrays.append(("wave_period", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
+        arrays.append(("wave_period", empty("wave_period")))
 
     if msgs_l:
         _, _, _, arr_l, _ = extract(msgs_l)
         arr_l = arr_l[:: args.step]
-        arrays.append(("water_level", quantize_int16(arr_l, **QUANT["water_level"])))
+        arrays.append(("water_level", quantize(arr_l, **QUANT["water_level"])))
     else:
-        arrays.append(("water_level", np.full((ny * nx, nt), SENTINEL, dtype=np.int16)))
+        arrays.append(("water_level", empty("water_level")))
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
