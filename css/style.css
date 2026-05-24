@@ -250,6 +250,23 @@ body.resizing {
     max-height: 160px;
 }
 
+#dive-sites select {
+    width: 100%;
+    background: #0c1326;
+    color: #dde6f0;
+    border: 1px solid #1d3556;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+#dive-sites select:hover,
+#dive-sites select:focus {
+    outline: none;
+    border-color: #2585c4;
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 720px) {

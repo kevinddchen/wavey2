@@ -31,7 +31,7 @@ The page can be embedded via `<iframe>`. A minimal example:
 Use the URL parameters above to deep-link to a specific location. For example, to open with the marker on Lovers Point:
 
 ```html
-<iframe src="https://kevinddchen.github.io/wavey2/?lat=36.6203&lon=-121.9022" loading="lazy"></iframe>
+<iframe src="https://kevinddchen.github.io/wavey2/?lat=36.6249&lon=-121.9135" loading="lazy"></iframe>
 ```
 
 ## NOAA Nearshore Wave Prediction System

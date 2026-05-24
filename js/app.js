@@ -7,6 +7,13 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
 const DEFAULT_MARKER_LON = -121.891;
 
+const DIVE_SITES = [
+    { name: "Breakwater", lat: 36.6113, lon: -121.891 },
+    { name: "McAbee", lat: 36.6158, lon: -121.8966 },
+    { name: "Lovers Point", lat: 36.6249, lon: -121.9135 },
+    { name: "Monastery", lat: 36.5254, lon: -121.9303 },
+];
+
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const MAX_WAVE_HEIGHT = 12;
@@ -560,11 +567,28 @@ async function init() {
         });
     }
 
+    // Dive sites dropdown — pick a site to focus the marker (and pan the map) to it
+    const diveSitesSelect = document.getElementById("dive-sites-select");
+    DIVE_SITES.forEach((site, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = site.name;
+        diveSitesSelect.appendChild(opt);
+    });
+    diveSitesSelect.addEventListener("change", () => {
+        const site = DIVE_SITES[+diveSitesSelect.value];
+        if (!site) return;
+        selectPoint(site.lat, site.lon);
+        map.panTo([site.lat, site.lon]);
+        syncUrl();
+    });
+
     selectPoint(initialMarkerLat, initialMarkerLon);
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
         syncUrl();
+        diveSitesSelect.value = ""; // reset to placeholder
     });
 
     // Sidebar resizer (drag the divider to resize the sidebar)
