@@ -561,6 +561,15 @@ async function init() {
         updateCharts(data, selectedIdx, selectedIdx2, tIdx);
     }
 
+    function clearComparison() {
+        if (marker2) {
+            marker2.remove();
+            marker2 = null;
+        }
+        selectedIdx2 = null;
+        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+    }
+
     function syncUrl() {
         writeUrlState({
             lat: marker ? marker.getLatLng().lat : null,
@@ -568,13 +577,16 @@ async function init() {
         });
     }
 
-    // Dive sites dropdown — pick a site to focus the marker (and pan the map) to it
+    // Dive site dropdowns — populate both selects with the same site options
     const diveSitesSelect = document.getElementById("dive-sites-select");
+    const diveSitesSelect2 = document.getElementById("dive-sites-select-2");
     DIVE_SITES.forEach((site, i) => {
-        const opt = document.createElement("option");
-        opt.value = String(i);
-        opt.textContent = site.name;
-        diveSitesSelect.appendChild(opt);
+        for (const sel of [diveSitesSelect, diveSitesSelect2]) {
+            const opt = document.createElement("option");
+            opt.value = String(i);
+            opt.textContent = site.name;
+            sel.appendChild(opt);
+        }
     });
     diveSitesSelect.addEventListener("change", () => {
         const site = DIVE_SITES[+diveSitesSelect.value];
@@ -582,6 +594,17 @@ async function init() {
         selectPoint(site.lat, site.lon);
         map.panTo([site.lat, site.lon]);
         syncUrl();
+    });
+    diveSitesSelect2.addEventListener("change", () => {
+        const val = diveSitesSelect2.value;
+        if (val === "clear") {
+            clearComparison();
+            return;
+        }
+        const site = DIVE_SITES[+val];
+        if (!site) return;
+        selectPoint2(site.lat, site.lon);
+        // NOTE: do not pan map
     });
 
     selectPoint(initialMarkerLat, initialMarkerLon);
@@ -594,6 +617,7 @@ async function init() {
     map.on("contextmenu", (e) => {
         L.DomEvent.preventDefault(e.originalEvent);
         selectPoint2(e.latlng.lat, e.latlng.lng);
+        diveSitesSelect2.value = ""; // reset to placeholder
     });
 
     // Sidebar resizer (drag the divider to resize the sidebar)

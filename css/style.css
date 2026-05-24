@@ -250,21 +250,41 @@ body.resizing {
     max-height: 160px;
 }
 
+#dive-sites {
+    display: flex;
+    gap: 8px;
+}
 #dive-sites select {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: #0c1326;
     color: #dde6f0;
     border: 1px solid #1d3556;
+    border-left-width: 3px;
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 12px;
     font-family: inherit;
     cursor: pointer;
 }
+#dive-sites select.primary {
+    border-left-color: #4285f4;
+}
+#dive-sites select.comparison {
+    border-left-color: #ffd700;
+}
 #dive-sites select:hover,
 #dive-sites select:focus {
     outline: none;
     border-color: #2585c4;
+}
+#dive-sites select.primary:hover,
+#dive-sites select.primary:focus {
+    border-left-color: #4285f4;
+}
+#dive-sites select.comparison:hover,
+#dive-sites select.comparison:focus {
+    border-left-color: #ffd700;
 }
 
 /* ── Responsive ── */
