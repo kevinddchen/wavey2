@@ -24,12 +24,12 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 
 The current marker positions are encoded in the URL so you can bookmark or share a link to a specific view:
 
-| Parameter | Description                                |
-| --------- | ------------------------------------------ |
-| `lat`     | Latitude of the blue (primary) marker      |
-| `lon`     | Longitude of the blue (primary) marker     |
-| `cmpLat`  | Latitude of the gold (comparison) marker   |
-| `cmpLon`  | Longitude of the gold (comparison) marker  |
+| Parameter | Description                               |
+| --------- | ----------------------------------------- |
+| `lat`     | Latitude of the blue (primary) marker     |
+| `lon`     | Longitude of the blue (primary) marker    |
+| `cmpLat`  | Latitude of the gold (comparison) marker  |
+| `cmpLon`  | Longitude of the gold (comparison) marker |
 
 ## Embedding on another site
 
