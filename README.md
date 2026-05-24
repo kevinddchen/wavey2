@@ -4,21 +4,22 @@
 
 > **Disclaimer:** This project was vibe-coded with Claude.
 
-A static webpage that visualizes scuba diving conditions (wave height, wave period, wave direction, water level) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
+A static webpage that visualizes scuba diving conditions (wave height, wave period, wave direction, water level / tide) for the Monterey Bay area from NOAA NWPS GRIB2 forecast data.
 
 This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of the project.
 
 ## Features
 
-- Interactive Leaflet map with a wave-height heatmap overlay
+- Interactive map with a wave height heatmap overlay
 - Time slider and play button to animate through forecast time steps
 - Click any ocean point to display time-series charts for that location:
-    - Significant wave height
+    - Wave height
     - Wave period
     - Wave direction
     - Water level / tide
-- A cursor on the charts tracks the currently selected time step
-- URL parameters (`lat`, `lon`) capture the marker location so you can bookmark or share a link to a specific dive site
+- **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the primary (blue) series
+- **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
+- URL parameters (`lat`, `lon`) capture the primary marker location so you can bookmark or share a link to a specific dive site
 
 ## Embedding on another site
 

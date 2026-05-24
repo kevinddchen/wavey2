@@ -201,6 +201,15 @@ body.resizing {
     color: #527090;
     font-style: italic;
 }
+#instructions .dot {
+    font-style: normal;
+}
+#instructions .dot.primary {
+    color: #4285f4;
+}
+#instructions .dot.comparison {
+    color: #ffd700;
+}
 
 #selected-info {
     font-size: 12px;
