@@ -6,7 +6,6 @@ const LOCAL_TIMEZONE = "America/Los_Angeles";
 // Default view state (used when no URL params are provided)
 const DEFAULT_MARKER_LAT = 36.6113; // Breakwater
 const DEFAULT_MARKER_LON = -121.891;
-const DEFAULT_ZOOM = 11;
 
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
@@ -458,7 +457,7 @@ async function init() {
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_MARKER_LAT;
     const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_MARKER_LON;
-    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], DEFAULT_ZOOM);
+    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], 11);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18,
