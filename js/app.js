@@ -514,8 +514,7 @@ async function init() {
         })
         .replace(",", "");
     document.getElementById("version-label").textContent = `v${VERSION}`;
-    document.getElementById("status").textContent =
-        `${data.metadata.source} · updated ${forecastLabel} PT`;
+    document.getElementById("status").textContent = `${data.metadata.source} · updated ${forecastLabel} PT`;
     if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
     // Map — centers on the initial marker location
