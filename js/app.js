@@ -123,6 +123,12 @@ const DTYPE_VIEW = {
     int16: { ctor: Int16Array, bytes: 2 },
 };
 
+// Inverse of the encode-side transform (linear → identity, sqrt → square).
+const INVERSE_TRANSFORM = {
+    linear: (y) => y,
+    sqrt: (y) => y * y,
+};
+
 function decodeBinary(buf) {
     const view = new DataView(buf);
     const headerLen = view.getUint32(0, true);
@@ -135,18 +141,20 @@ function decodeBinary(buf) {
     for (const v of variables) {
         const info = DTYPE_VIEW[v.dtype];
         if (!info) throw new Error("unsupported dtype: " + v.dtype);
+        const inv = INVERSE_TRANSFORM[v.transform];
+        if (!inv) throw new Error("unsupported transform: " + v.transform);
         const count = ncells * nt;
         const raw = new info.ctor(buf, byteOffset, count);
         byteOffset += count * info.bytes;
 
-        const { scale, offset: valOffset, sentinel } = v;
+        const { scale, sentinel } = v;
         const series = new Array(ncells);
         for (let c = 0; c < ncells; c++) {
             const row = new Array(nt);
             const base = c * nt;
             for (let t = 0; t < nt; t++) {
                 const x = raw[base + t];
-                row[t] = x === sentinel ? null : x / scale + valOffset;
+                row[t] = x === sentinel ? null : inv(x / scale);
             }
             series[c] = row;
         }

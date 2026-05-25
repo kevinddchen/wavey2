@@ -37,16 +37,17 @@ JSON header schema
       // One entry per binary array, in the order they appear in the payload.
       // `dtype` is one of "uint8" | "int8" | "int16" (see DTYPE_INFO below);
       // `sentinel` is the encoded value that means "null" (no data — e.g. land
-      // cells for wave fields). Real value is recovered as:
-      //     real = int_value / scale + offset       (when int_value != sentinel)
-      { "name":     "wave_height",
-        "dtype":    "uint8",
-        "scale":    32,              // step = 1/scale in the variable's units
-        "offset":   0.0,
-        "sentinel": 255 },
-      { "name": "wave_dir",    "dtype": "uint8", "scale": 0.5, "offset": 0.0, "sentinel": 255  },
-      { "name": "wave_period", "dtype": "uint8", "scale": 8,   "offset": 0.0, "sentinel": 255  },
-      { "name": "water_level", "dtype": "int8",  "scale": 40,  "offset": 0.0, "sentinel": -128 }
+      // cells for wave fields). `transform` is "linear" (default) or "sqrt";
+      // the decoder applies the inverse (identity / square). Real value is:
+      //     real = inv_transform(int_value / scale)   (when int_value != sentinel)
+      { "name":      "wave_height",
+        "dtype":     "uint8",
+        "scale":     64,             // step depends on transform; for sqrt,
+        "sentinel":  255,            // delta(real)/delta(int) ≈ 2 * sqrt(real) / scale
+        "transform": "sqrt" },       // encode sqrt(real); decode squares the result
+      { "name": "wave_dir",    "dtype": "uint8", "scale": 0.5, "sentinel": 255,  "transform": "linear" },
+      { "name": "wave_period", "dtype": "uint8", "scale": 8,   "sentinel": 255,  "transform": "linear" },
+      { "name": "water_level", "dtype": "int8",  "scale": 40,  "sentinel": -128, "transform": "linear" }
     ]
   }
 
@@ -89,18 +90,22 @@ DTYPE_INFO: dict[str, dict[str, Any]] = {
     "int16": {"np": np.int16, "lo": -32767, "hi": 32767, "sentinel": -32768, "bytes": 2, "endian": "<i2"},
 }
 
-# Per-variable quantization. `real_value = int_value / scale + offset`. Choose
-# `scale` so that the encoded range covers the physically plausible span; values
-# outside that span get clipped (rare for wave/tide fields).
-#   wave_height: 0–7.9375 m   step 1/32 m  (3.125 cm)
-#   wave_dir   : 0–360 °      step 1/0.5 ° (2 °)
-#   wave_period: 0–31.75 s    step 1/8 s   (0.125 s)
-#   water_level: ±3.175 m     step 1/40 m  (2.5 cm)
+# Per-variable quantization. Encoding is:
+#     int_value = round(transform(real) * scale)
+# and decoding inverts it:
+#     real = inverse_transform(int_value / scale)
+# `transform` defaults to "linear" (identity). "sqrt" applies sqrt on encode and
+# square on decode — gives more resolution at small values, less at large ones,
+# useful for non-negative fields whose distribution skews small (e.g. wave height).
+#   wave_height: sqrt-encoded, 0–8 m
+#   wave_dir   : linear, 0–360 °  step 1/0.5 °  (2 °)
+#   wave_period: linear, 0–32 s   step 1/8 s    (0.125 s)
+#   water_level: linear, ±3.2 m   step 1/40 m   (2.5 cm)
 QUANT: dict[str, dict[str, Any]] = {
-    "wave_height": {"dtype": "uint8", "scale": 32, "offset": 0.0},
-    "wave_dir": {"dtype": "uint8", "scale": 0.5, "offset": 0.0},
-    "wave_period": {"dtype": "uint8", "scale": 8, "offset": 0.0},
-    "water_level": {"dtype": "int8", "scale": 40, "offset": 0.0},
+    "wave_height": {"dtype": "uint8", "scale": 256 / np.sqrt(8), "transform": "sqrt"},
+    "wave_dir": {"dtype": "uint8", "scale": 0.5},
+    "wave_period": {"dtype": "uint8", "scale": 8},
+    "water_level": {"dtype": "int8", "scale": 40},
 }
 
 # ── Types ─────────────────────────────────────────────────────────────────────
@@ -226,14 +231,28 @@ def extract(
     return times_iso, lat, lon, data, ref_time_iso
 
 
-def quantize(arr: npt.NDArray[Any], dtype: str, scale: float, offset: float) -> npt.NDArray[Any]:
+def quantize(
+    arr: npt.NDArray[Any],
+    dtype: str,
+    scale: float,
+    transform: str = "linear",
+) -> npt.NDArray[Any]:
     """[nt,ny,nx] → typed [ny*nx, nt]; NaN/Inf → sentinel, out-of-range clipped."""
     info = DTYPE_INFO[dtype]
     nt, ny, nx = arr.shape
     # Cell-major, time-minor: result[y*nx + x, t] = arr[t, y, x]
     flat = np.transpose(arr, (1, 2, 0)).reshape(ny * nx, nt)
     nan_mask = ~np.isfinite(flat)
-    q = np.where(nan_mask, 0.0, np.round((flat - offset) * scale))
+    val = np.where(nan_mask, 0.0, flat)
+    if transform == "linear":
+        pass
+    elif transform == "sqrt":
+        # Inverse is `square` on the JS side; negative inputs shouldn't occur
+        # for sqrt-encoded fields, but clamp to 0 to avoid NaN from sqrt(<0).
+        val = np.sqrt(np.maximum(val, 0.0))
+    else:
+        raise ValueError(f"unknown transform: {transform!r}")
+    q = np.round(val * scale)
     np.clip(q, info["lo"], info["hi"], out=q)
     q[nan_mask] = info["sentinel"]
     return q.astype(info["np"])  # type: ignore[no-any-return]
@@ -259,8 +278,8 @@ def write_binary(
                 "name": name,
                 "dtype": QUANT[name]["dtype"],
                 "scale": QUANT[name]["scale"],
-                "offset": QUANT[name]["offset"],
                 "sentinel": DTYPE_INFO[QUANT[name]["dtype"]]["sentinel"],
+                "transform": QUANT[name].get("transform", "linear"),
             }
             for name, _ in arrays
         ],
