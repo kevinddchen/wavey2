@@ -404,8 +404,8 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_binary(out_path, metadata, arrays)
 
-    size_mb = out_path.stat().st_size / 1e3
-    print(f"\nWrote {out_path}  ({size_mb:.1f} kB)")
+    size_kb = out_path.stat().st_size / 1e3
+    print(f"\nWrote {out_path}  ({size_kb:.1f} kB)")
 
 
 if __name__ == "__main__":

@@ -85,7 +85,7 @@ This creates a file `data/waves.bin.gz`. The uncompressed payload has the layout
 ```
 
 The whole file is gzipped on disk so the wire transfer stays small.
-The JSON header contains the metadata (source, forecast_time, times, grid, units) plus per-variable `scale`/`offset` for dequantization: `real_value = int_value / scale + offset`.
+The JSON header contains the metadata (source, forecast_time, times, grid, units) plus per-variable `scale`/`sentinel`/`transform` for dequantization: `real_value = inverse_transform(int_value / scale)`, where `transform` is `"linear"` (identity) or `"sqrt"` (decoder squares the result). `sentinel` is the encoded value meaning "no data".
 See `scripts/grib2bin.py` for the writer and `js/app.js` (`decodeBinary`) for the reader.
 
 Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.

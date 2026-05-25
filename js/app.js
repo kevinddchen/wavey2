@@ -180,7 +180,6 @@ function generateEmptyData() {
         wave_dir: [],
         wave_period: [],
         water_level: [],
-        _demo: true,
     };
 }
 
@@ -516,7 +515,6 @@ async function init() {
         .replace(",", "");
     document.getElementById("version-label").textContent = `v${VERSION}`;
     document.getElementById("status").textContent = `Last updated: ${updatedLabel} PT · ${data.metadata.source}`;
-    if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
