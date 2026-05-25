@@ -503,7 +503,7 @@ async function init() {
 
     const urlState = readUrlState();
 
-    const forecastLabel = new Date(data.metadata.forecast_time)
+    const updatedLabel = new Date()
         .toLocaleString("en-US", {
             weekday: "short",
             month: "short",
@@ -515,7 +515,7 @@ async function init() {
         })
         .replace(",", "");
     document.getElementById("version-label").textContent = `v${VERSION}`;
-    document.getElementById("status").textContent = `Forecast timestamp: ${forecastLabel} PT`;
+    document.getElementById("status").textContent = `Last updated: ${updatedLabel} PT · ${data.metadata.source}`;
     if (data._demo) document.getElementById("demo-banner").style.display = "block";
 
     // Map — centers on the initial marker location
