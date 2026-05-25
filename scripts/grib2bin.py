@@ -13,8 +13,7 @@ Output format (gzip-compressed)
                                     dtype and sentinel value are declared per
                                     variable in the header.
 
-The whole stream is wrapped in gzip on disk (`waves.bin.gz`) because GitHub
-Pages doesn't auto-compress `application/octet-stream`; the browser
+The whole stream is wrapped in gzip on disk (`waves.bin.gz`); the browser
 decompresses it via `DecompressionStream` before decoding.
 
 JSON header schema
@@ -28,7 +27,7 @@ JSON header schema
       "grid":          { "nx": int, "ny": int,
                          "lat_min": float, "lat_max": float,
                          "lon_min": float, "lon_max": float },
-      "units":         { "wave_height": "m", "wave_dir": "°",
+      "units":         { "wave_height": "m", "wave_dir": "deg",
                          "wave_period": "s", "water_level": "m" }
     },
     "ncells": int,                   // = grid.nx * grid.ny
@@ -42,8 +41,8 @@ JSON header schema
       //     real = inv_transform(int_value / scale)   (when int_value != sentinel)
       { "name":      "wave_height",
         "dtype":     "uint8",
-        "scale":     64,             // step depends on transform; for sqrt,
-        "sentinel":  255,            // delta(real)/delta(int) ≈ 2 * sqrt(real) / scale
+        "scale":     90.51,          // step depends on transform; for sqrt,
+        "sentinel":  255,
         "transform": "sqrt" },       // encode sqrt(real); decode squares the result
       { "name": "wave_dir",    "dtype": "uint8", "scale": 0.5, "sentinel": 255,  "transform": "linear" },
       { "name": "wave_period", "dtype": "uint8", "scale": 8,   "sentinel": 255,  "transform": "linear" },
@@ -370,7 +369,7 @@ def main() -> None:
         "forecast_time": ref_time or times_iso[0],
         "times": times_iso,
         "grid": grid,
-        "units": {"wave_height": "m", "wave_dir": "°", "wave_period": "s", "water_level": "m"},
+        "units": {"wave_height": "m", "wave_dir": "deg", "wave_period": "s", "water_level": "m"},
     }
 
     def empty(name: str) -> npt.NDArray[Any]:
@@ -405,8 +404,8 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_binary(out_path, metadata, arrays)
 
-    size_mb = out_path.stat().st_size / 1e6
-    print(f"\nWrote {out_path}  ({size_mb:.1f} MB)")
+    size_mb = out_path.stat().st_size / 1e3
+    print(f"\nWrote {out_path}  ({size_mb:.1f} kB)")
 
 
 if __name__ == "__main__":

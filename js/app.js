@@ -141,7 +141,7 @@ function decodeBinary(buf) {
     for (const v of variables) {
         const info = DTYPE_VIEW[v.dtype];
         if (!info) throw new Error("unsupported dtype: " + v.dtype);
-        const inv = INVERSE_TRANSFORM[v.transform];
+        const inv = INVERSE_TRANSFORM[v.transform || "linear"];
         if (!inv) throw new Error("unsupported transform: " + v.transform);
         const count = ncells * nt;
         const raw = new info.ctor(buf, byteOffset, count);
@@ -174,7 +174,7 @@ function generateEmptyData() {
             forecast_time: t0.toISOString(),
             times,
             grid: { nx: 90, ny: 178, lat_min: 36.2, lat_max: 37.0, lon_min: -122.2, lon_max: -121.7 },
-            units: { wave_height: "m", wave_dir: "°", wave_period: "s", water_level: "m" },
+            units: { wave_height: "m", wave_dir: "deg", wave_period: "s", water_level: "m" },
         },
         wave_height: [],
         wave_dir: [],
