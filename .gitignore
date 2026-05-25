@@ -144,8 +144,9 @@ vite.config.ts.timestamp-*
 
 # ===
 
-.claude
+/.claude
+/.venv
+/data
 .DS_Store
-.venv
+__pycache__
 *.grib2
-data
