@@ -179,22 +179,6 @@ body.resizing {
     min-height: 14px;
 }
 
-#demo-banner {
-    background: #1e3010;
-    border: 1px solid #3a5520;
-    border-radius: 4px;
-    padding: 6px 10px;
-    font-size: 11px;
-    color: #a8c870;
-    margin-bottom: 8px;
-}
-#demo-banner code {
-    font-family: monospace;
-    background: #2a4218;
-    padding: 1px 4px;
-    border-radius: 2px;
-}
-
 #instructions {
     font-size: 12px;
     color: #527090;
