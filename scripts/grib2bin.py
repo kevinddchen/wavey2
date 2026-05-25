@@ -254,7 +254,7 @@ def quantize(
     q = np.round(val * scale)
     np.clip(q, info["lo"], info["hi"], out=q)
     q[nan_mask] = info["sentinel"]
-    return q.astype(info["np"])  # type: ignore[no-any-return]
+    return q.astype(info["np"])
 
 
 def write_binary(
