@@ -679,28 +679,33 @@ async function init() {
         syncUrl();
     });
 
-    selectPoint(initialMarkerLat, initialMarkerLon);
+    // Map dive sites to their snapped grid indices so a click that lands on the
+    // same cell as a known site can sync the dropdown.
+    const SITE_GRID_INDICES = DIVE_SITES.map((s) => nearestPoint(grid, s.lat, s.lon).idx);
+    const matchingSiteValue = (gridIdx) => {
+        const i = SITE_GRID_INDICES.indexOf(gridIdx);
+        return i >= 0 ? String(i) : "";
+    };
 
-    // If we fell back to the default primary site, reflect it in the dropdown
-    if (urlState.lat == null && urlState.lon == null) {
-        diveSitesSelect.value = String(DIVE_SITES.indexOf(DEFAULT_PRIMARY_SITE));
-    }
+    selectPoint(initialMarkerLat, initialMarkerLon);
+    diveSitesSelect.value = matchingSiteValue(selectedIdx);
 
     // Comparison marker is only placed if both URL params are provided
     if (urlState.cmpLat != null && urlState.cmpLon != null) {
         selectPoint2(urlState.cmpLat, urlState.cmpLon);
     }
+    diveSitesSelect2.value = matchingSiteValue(selectedIdx2);
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
         syncUrl();
-        diveSitesSelect.value = ""; // reset to placeholder
+        diveSitesSelect.value = matchingSiteValue(selectedIdx);
     });
     map.on("contextmenu", (e) => {
         L.DomEvent.preventDefault(e.originalEvent);
         selectPoint2(e.latlng.lat, e.latlng.lng);
         syncUrl();
-        diveSitesSelect2.value = ""; // reset to placeholder
+        diveSitesSelect2.value = matchingSiteValue(selectedIdx2);
     });
 
     // Sidebar resizer (drag the divider to resize the sidebar)
