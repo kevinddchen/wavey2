@@ -349,6 +349,13 @@ function formatLocalTime(date, fields) {
     return date.toLocaleString("en-US", { ...fields, hour12: false, timeZone: LOCAL_TIMEZONE }).replace(",", "");
 }
 
+function formatAge(ms) {
+    const h = Math.round(ms / 3.6e6);
+    if (h < 1) return "just issued";
+    if (h < 24) return `${h}h ago`;
+    return `${Math.round(h / 24)}d ago`;
+}
+
 function fmtTime(isoStr, forecastTime) {
     const d = new Date(isoStr);
     const dh = Math.round((d - new Date(forecastTime)) / 3.6e6);
@@ -464,9 +471,9 @@ async function init() {
 
     const urlState = readUrlState();
 
-    const updatedLabel = formatLocalTime(new Date(), FULL_TIME_FIELDS);
+    const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;
-    document.getElementById("status").textContent = `Last updated: ${updatedLabel} PT · ${data.metadata.source}`;
+    document.getElementById("status").textContent = `Forecast ${forecastAge} · ${data.metadata.source}`;
 
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
