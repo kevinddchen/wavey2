@@ -293,22 +293,7 @@ function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
 let charts = {};
 
 function initCharts(times) {
-    const labels = times.map((t) => {
-        const d = new Date(t);
-        return (
-            d
-                .toLocaleString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                    timeZone: LOCAL_TIMEZONE,
-                })
-                .replace(",", "") + " PT"
-        );
-    });
+    const labels = times.map((t) => `${formatLocalTime(new Date(t), FULL_TIME_FIELDS)} PT`);
 
     charts.height = makeChart("chart-height", "ft", 0, null, null);
     charts.period = makeChart("chart-period", "sec", 0, null, null);
@@ -321,24 +306,11 @@ function initCharts(times) {
             return items[0].label;
         };
         c.options.scales.x.ticks.maxTicksLimit = 100;
-        c.options.scales.x.ticks.callback = (val) => {
-            const d = new Date(times[val]);
-            return d.toLocaleString("en-US", {
-                weekday: "short",
-                timeZone: LOCAL_TIMEZONE,
-            });
-        };
+        c.options.scales.x.ticks.callback = (val) =>
+            formatLocalTime(new Date(times[val]), { weekday: "short" });
         c.options.scales.x.afterBuildTicks = (scale) => {
             scale.ticks = scale.ticks.filter((tick) => {
-                const d = new Date(times[tick.value]);
-                const h = parseInt(
-                    d.toLocaleString("en-US", {
-                        hour: "2-digit",
-                        hour12: false,
-                        timeZone: LOCAL_TIMEZONE,
-                    }),
-                    10,
-                );
+                const h = parseInt(formatLocalTime(new Date(times[tick.value]), { hour: "2-digit" }), 10);
                 return h === 0;
             });
         };
@@ -375,22 +347,24 @@ function setTimeCursor(tIdx) {
 
 // ── Time display ─────────────────────────────────────────────────────────────
 
+const FULL_TIME_FIELDS = {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+};
+
+function formatLocalTime(date, fields) {
+    return date
+        .toLocaleString("en-US", { ...fields, hour12: false, timeZone: LOCAL_TIMEZONE })
+        .replace(",", "");
+}
+
 function fmtTime(isoStr, forecastTime) {
     const d = new Date(isoStr);
     const dh = Math.round((d - new Date(forecastTime)) / 3.6e6);
-    return (
-        d
-            .toLocaleString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-                timeZone: LOCAL_TIMEZONE,
-            })
-            .replace(",", "") + ` PT (+${dh}h)`
-    );
+    return `${formatLocalTime(d, FULL_TIME_FIELDS)} PT (+${dh}h)`;
 }
 
 // ── Arrow overlay ─────────────────────────────────────────────────────────────
@@ -502,17 +476,7 @@ async function init() {
 
     const urlState = readUrlState();
 
-    const updatedLabel = new Date()
-        .toLocaleString("en-US", {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-            timeZone: LOCAL_TIMEZONE,
-        })
-        .replace(",", "");
+    const updatedLabel = formatLocalTime(new Date(), FULL_TIME_FIELDS);
     document.getElementById("version-label").textContent = `v${VERSION}`;
     document.getElementById("status").textContent = `Last updated: ${updatedLabel} PT · ${data.metadata.source}`;
 
