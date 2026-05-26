@@ -225,7 +225,7 @@ Chart.register({
     },
 });
 
-function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
+function makeChart(id, times, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
     const dataset = (clr) => ({
         data: [],
         borderColor: clr,
@@ -237,10 +237,11 @@ function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
         tension: 0.3,
         spanGaps: false,
     });
+    const labels = times.map((t) => `${formatLocalTime(new Date(t), FULL_TIME_FIELDS)} PT`);
     const cfg = {
         type: "line",
         data: {
-            labels: [],
+            labels,
             datasets: [dataset(PRIMARY_COLOR), dataset(SECONDARY_COLOR)],
         },
         options: {
@@ -253,6 +254,7 @@ function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
                     mode: "index",
                     intersect: false,
                     callbacks: {
+                        title: (items) => (items.length ? items[0].label : ""),
                         label: (ctx) => (ctx.parsed.y != null ? `${ctx.parsed.y.toFixed(2)} ${yLabel}` : "N/A"),
                     },
                 },
@@ -261,9 +263,17 @@ function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
                 x: {
                     ticks: {
                         color: TICK_COLOR,
-                        maxTicksLimit: 6,
+                        maxTicksLimit: 100,
                         maxRotation: 0,
                         font: { size: 10 },
+                        callback: (val) => formatLocalTime(new Date(times[val]), { weekday: "short" }),
+                    },
+                    // Only show one tick per day (at local midnight)
+                    afterBuildTicks: (scale) => {
+                        scale.ticks = scale.ticks.filter((tick) => {
+                            const h = parseInt(formatLocalTime(new Date(times[tick.value]), { hour: "2-digit" }), 10);
+                            return h === 0;
+                        });
                     },
                     grid: { color: GRID_COLOR },
                 },
@@ -293,33 +303,10 @@ function makeChart(id, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
 let charts = {};
 
 function initCharts(times) {
-    const labels = times.map((t) => `${formatLocalTime(new Date(t), FULL_TIME_FIELDS)} PT`);
-
-    charts.height = makeChart("chart-height", "ft", 0, null, null);
-    charts.period = makeChart("chart-period", "sec", 0, null, null);
-    charts.dir = makeChart("chart-dir", "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
-    charts.tide = makeChart("chart-tide", "ft", null, null, null);
-
-    Object.values(charts).forEach((c) => {
-        c.options.plugins.tooltip.callbacks.title = (items) => {
-            if (!items.length) return "";
-            return items[0].label;
-        };
-        c.options.scales.x.ticks.maxTicksLimit = 100;
-        c.options.scales.x.ticks.callback = (val) =>
-            formatLocalTime(new Date(times[val]), { weekday: "short" });
-        c.options.scales.x.afterBuildTicks = (scale) => {
-            scale.ticks = scale.ticks.filter((tick) => {
-                const h = parseInt(formatLocalTime(new Date(times[tick.value]), { hour: "2-digit" }), 10);
-                return h === 0;
-            });
-        };
-    });
-
-    Object.values(charts).forEach((c) => {
-        c.data.labels = labels;
-        c.update("none");
-    });
+    charts.height = makeChart("chart-height", times, "ft", 0, null, null);
+    charts.period = makeChart("chart-period", times, "sec", 0, null, null);
+    charts.dir = makeChart("chart-dir", times, "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
+    charts.tide = makeChart("chart-tide", times, "ft", null, null, null);
 }
 
 function updateCharts(data, gridIdx, gridIdx2, tIdx) {
