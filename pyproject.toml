@@ -19,8 +19,6 @@ dev = [
 [tool.mypy]
 python_version = "3.14"
 strict = true
-disallow_any_generics = false
-disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 module = [
