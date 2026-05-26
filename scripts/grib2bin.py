@@ -110,8 +110,6 @@ QUANT: dict[str, dict[str, Any]] = {
 # ── Types ─────────────────────────────────────────────────────────────────────
 
 Msg = dict[str, Any]
-MsgGroup = dict[str, list[Msg]]
-MsgResult = tuple[list[Msg], str] | tuple[None, None]
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -148,21 +146,13 @@ def list_variables(path: Path) -> None:
     print()
 
 
-def _best_group(groups: MsgGroup) -> MsgResult:
-    """From a dict of shortName→[msgs], return the list with the most entries."""
-    if not groups:
-        return None, None
-    sn = max(groups, key=lambda k: len(groups[k]))
-    return sorted(groups[sn], key=lambda m: m["validDate"]), sn
-
-
-def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult, MsgResult]:
-    """Single-pass read; returns (msgs_h, sn_h), (msgs_d, sn_d), (msgs_p, sn_p), (msgs_l, sn_l)."""
-    targets: dict[str, MsgGroup] = {
-        HEIGHT_NAME.lower(): {},
-        DIR_NAME.lower(): {},
-        PERIOD_NAME.lower(): {},
-        LEVEL_NAME.lower(): {},
+def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
+    """Single-pass read; returns msgs for (height, dir, period, level), or None if not present."""
+    targets: dict[str, list[Msg]] = {
+        HEIGHT_NAME.lower(): [],
+        DIR_NAME.lower(): [],
+        PERIOD_NAME.lower(): [],
+        LEVEL_NAME.lower(): [],
     }
 
     grbs = open_file(path)
@@ -175,23 +165,22 @@ def load_all_messages(path: Path) -> tuple[MsgResult, MsgResult, MsgResult, MsgR
         if hasattr(vals, "filled"):
             vals = vals.filled(np.nan)
         lats, lons = grb.latlons()
-        entry: Msg = {
-            "shortName": grb.shortName,
-            "validDate": grb.validDate,
-            "analDate": getattr(grb, "analDate", None),
-            "values": vals,
-            "lats": lats,
-            "lons": lons,
-        }
-        targets[sn].setdefault(sn, []).append(entry)
+        targets[sn].append(
+            {
+                "shortName": grb.shortName,
+                "validDate": grb.validDate,
+                "analDate": getattr(grb, "analDate", None),
+                "values": vals,
+                "lats": lats,
+                "lons": lons,
+            }
+        )
     grbs.close()
 
-    return (
-        _best_group(targets[HEIGHT_NAME.lower()]),
-        _best_group(targets[DIR_NAME.lower()]),
-        _best_group(targets[PERIOD_NAME.lower()]),
-        _best_group(targets[LEVEL_NAME.lower()]),
-    )
+    def sort_or_none(msgs: list[Msg]) -> list[Msg] | None:
+        return sorted(msgs, key=lambda m: m["validDate"]) if msgs else None
+
+    return tuple(sort_or_none(targets[k.lower()]) for k in (HEIGHT_NAME, DIR_NAME, PERIOD_NAME, LEVEL_NAME))
 
 
 def extract(
@@ -325,25 +314,22 @@ def main() -> None:
         return
 
     print("Reading GRIB2 messages...")
-    (msgs_h, sn_h), (msgs_d, sn_d), (msgs_p, sn_p), (msgs_l, sn_l) = load_all_messages(path)
+    msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
         print(f"ERROR: Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
         sys.exit(1)
 
-    print(f"  wave_height  → {sn_h} ({len(msgs_h)} steps)")
-    if sn_d and msgs_d:
-        print(f"  wave_dir     → {sn_d} ({len(msgs_d)} steps)")
-    else:
-        print("  wave_dir     → NOT FOUND (will be null)")
-    if sn_p and msgs_p:
-        print(f"  wave_period  → {sn_p} ({len(msgs_p)} steps)")
-    else:
-        print("  wave_period  → NOT FOUND (will be null)")
-    if sn_l and msgs_l:
-        print(f"  water_level  → {sn_l} ({len(msgs_l)} steps)")
-    else:
-        print("  water_level  → NOT FOUND (will be null)")
+    def report(label: str, msgs: list[Msg] | None) -> None:
+        if msgs:
+            print(f"  {label:11s}  → {msgs[0]['shortName']} ({len(msgs)} steps)")
+        else:
+            print(f"  {label:11s}  → NOT FOUND (will be null)")
+
+    report("wave_height", msgs_h)
+    report("wave_dir", msgs_d)
+    report("wave_period", msgs_p)
+    report("water_level", msgs_l)
 
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     if args.step > 1:
