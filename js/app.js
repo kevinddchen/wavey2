@@ -346,9 +346,7 @@ const FULL_TIME_FIELDS = {
 };
 
 function formatLocalTime(date, fields) {
-    return date
-        .toLocaleString("en-US", { ...fields, hour12: false, timeZone: LOCAL_TIMEZONE })
-        .replace(",", "");
+    return date.toLocaleString("en-US", { ...fields, hour12: false, timeZone: LOCAL_TIMEZONE }).replace(",", "");
 }
 
 function fmtTime(isoStr, forecastTime) {
