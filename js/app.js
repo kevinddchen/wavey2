@@ -326,9 +326,12 @@ function updateCharts(data, gridIdx, gridIdx2, tIdx) {
 }
 
 function setTimeCursor(tIdx) {
+    // Data hasn't changed — only the cursor plugin needs to redraw. `render()`
+    // skips the update cycle (no re-layout / re-scale) that `update("none")`
+    // does, which matters during playback (40 redraws/sec across 4 charts).
     Object.values(charts).forEach((c) => {
         c._currentIdx = tIdx;
-        c.update("none");
+        c.render();
     });
 }
 
