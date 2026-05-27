@@ -518,13 +518,30 @@ async function init() {
     let playing = false,
         timer = null;
     const playBtn = document.getElementById("play-btn");
-    playBtn.addEventListener("click", () => {
+    function togglePlay() {
         playing = !playing;
         playBtn.innerHTML = playing ? "&#9646;&#9646;" : "&#9654;";
         if (playing) {
             timer = setInterval(() => applyTime((tIdx + 1) % nt), 100);
         } else {
             clearInterval(timer);
+        }
+    }
+    playBtn.addEventListener("click", togglePlay);
+
+    // Keyboard shortcuts: space = play/pause, ←/→ = step. Skip when a form
+    // control is focused so it doesn't fight the slider, selects, or buttons.
+    window.addEventListener("keydown", (e) => {
+        if (e.target instanceof Element && e.target.matches("input, select, textarea, button")) return;
+        if (e.key === " ") {
+            e.preventDefault();
+            togglePlay();
+        } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            applyTime((tIdx - 1 + nt) % nt);
+        } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            applyTime((tIdx + 1) % nt);
         }
     });
 
