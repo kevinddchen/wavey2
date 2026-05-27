@@ -300,16 +300,16 @@ function makeChart(id, times, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
     return new Chart(document.getElementById(id), cfg);
 }
 
-let charts = {};
-
 function initCharts(times) {
-    charts.height = makeChart("chart-height", times, "ft", 0, null, null);
-    charts.period = makeChart("chart-period", times, "sec", 0, null, null);
-    charts.dir = makeChart("chart-dir", times, "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 });
-    charts.tide = makeChart("chart-tide", times, "ft", null, null, null);
+    return {
+        height: makeChart("chart-height", times, "ft", 0, null, null),
+        period: makeChart("chart-period", times, "sec", 0, null, null),
+        dir: makeChart("chart-dir", times, "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 }),
+        tide: makeChart("chart-tide", times, "ft", null, null, null),
+    };
 }
 
-function updateCharts(data, gridIdx, gridIdx2, tIdx) {
+function updateCharts(charts, data, gridIdx, gridIdx2, tIdx) {
     const apply = (chart, key) => {
         const series = data[key] || [];
         chart.data.datasets[0].data = gridIdx != null ? series[gridIdx] || [] : [];
@@ -325,7 +325,7 @@ function updateCharts(data, gridIdx, gridIdx2, tIdx) {
     });
 }
 
-function setTimeCursor(tIdx) {
+function setTimeCursor(charts, tIdx) {
     // Data hasn't changed — only the cursor plugin needs to redraw. `render()`
     // skips the update cycle (no re-layout / re-scale) that `update("none")`
     // does, which matters during playback (40 redraws/sec across 4 charts).
@@ -493,6 +493,10 @@ async function init() {
     // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
     map.createPane("primaryMarkerPane").style.zIndex = 700;
 
+    // Charts
+    const charts = initCharts(times);
+    drawLegend();
+
     // Time control
     const slider = document.getElementById("time-slider");
     const timeLabel = document.getElementById("time-label");
@@ -505,7 +509,7 @@ async function init() {
         timeLabel.textContent = fmtTime(times[i], data.metadata.forecast_time);
         heatLayer.setUrl(buildHeatmapURL(data, i));
         drawArrows(i);
-        setTimeCursor(i);
+        setTimeCursor(charts, i);
     }
 
     applyTime(0);
@@ -540,10 +544,6 @@ async function init() {
             applyTime((tIdx + 1) % nt);
         }
     });
-
-    // Charts
-    initCharts(times);
-    drawLegend();
 
     // Drag-to-scrub on charts
     let chartDragging = false;
@@ -592,7 +592,7 @@ async function init() {
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
         selectedIdx = pt.idx;
-        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
     }
 
     function selectPoint2(lat, lon) {
@@ -600,7 +600,7 @@ async function init() {
         if (!marker2) marker2 = makeMarker(pt.lat, pt.lon, SECONDARY_COLOR).addTo(map);
         else marker2.setLatLng([pt.lat, pt.lon]);
         selectedIdx2 = pt.idx;
-        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
     }
 
     function clearComparison() {
@@ -609,7 +609,7 @@ async function init() {
             marker2 = null;
         }
         selectedIdx2 = null;
-        updateCharts(data, selectedIdx, selectedIdx2, tIdx);
+        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
     }
 
     function syncUrl() {
