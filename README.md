@@ -19,17 +19,27 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
     - Water level / tide
 - **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the blue (primary) series
 - **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
+- **Keyboard shortcuts:** `Space` toggles play/pause and `←` / `→` step the time slider one frame at a time.
+- **Drag-to-scrub charts:** click and drag anywhere on a chart to scrub the time slider to that point.
 
 ### URL parameters
 
 The current marker positions are encoded in the URL so you can bookmark or share a link to a specific view:
 
-| Parameter | Description                               |
-| --------- | ----------------------------------------- |
-| `lat`     | Latitude of the blue (primary) marker     |
-| `lon`     | Longitude of the blue (primary) marker    |
-| `cmpLat`  | Latitude of the gold (comparison) marker  |
-| `cmpLon`  | Longitude of the gold (comparison) marker |
+| Parameter          | Description                                             |
+| ------------------ | ------------------------------------------------------- |
+| `lat`              | Latitude of the blue (primary) marker                   |
+| `lon`              | Longitude of the blue (primary) marker                  |
+| `cmpLat`           | Latitude of the gold (comparison) marker                |
+| `cmpLon`           | Longitude of the gold (comparison) marker               |
+| `zoom`             | Initial map zoom level (integer, 0–18)                  |
+| `charts`           | Comma-separated whitelist from `height,period,dir,tide` |
+| `hideMap`          | Hide the map panel                                      |
+| `hideSidebar`      | Hide the sidebar                                        |
+| `hideHeader`       | Hide the sidebar header / title block                   |
+| `hideSiteSelector` | Hide the dive-site dropdowns                            |
+| `hideTimeControl`  | Hide the time slider / play button / legend bar         |
+| `hideFooter`       | Hide the "View on GitHub" footer link                   |
 
 ## Embedding on another site
 
@@ -104,7 +114,7 @@ A plain file server is required because the page uses `fetch()` to load `data/wa
 2. Go to **Settings → Pages** and set the source to **GitHub Actions**.
 3. The site will be available at `https://<username>.github.io/<repo>/`.
 
-The `.github/workflows/deploy.yml` workflow handles the build and deploy. It runs automatically twice a day (07:00 and 13:00 UTC) to refresh the forecast data, and can also be triggered manually from the Actions tab.
+The `.github/workflows/deploy.yml` workflow handles the build and deploy. It runs automatically four times a day (02:00, 08:00, 14:00, and 20:00 UTC) to refresh the forecast data, and can also be triggered manually from the Actions tab.
 
 ## Developer tools
 
@@ -121,7 +131,7 @@ npm install
 ```bash
 uv run mypy .
 uv run ruff check
-uv run ruff format
+uv run ruff format --check
 ```
 
 ### Javascript checks
