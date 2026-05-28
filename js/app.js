@@ -461,15 +461,15 @@ function readUrlState() {
             .map((s) => s.trim())
             .filter((s) => valid.includes(s));
     };
-    const zoom = num("zoom");
     const t = num("t");
+    const zoom = num("zoom");
     return {
         lat: num("lat"),
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
-        zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         t: t != null ? Math.max(0, Math.round(t)) : null,
+        zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
         hideSidebar: bool("hideSidebar"),
