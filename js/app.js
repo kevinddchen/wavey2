@@ -438,15 +438,17 @@ function readUrlState() {
         const n = parseFloat(v);
         return isFinite(n) ? n : null;
     };
+    const zoom = num("zoom");
     return {
         lat: num("lat"),
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
+        zoom: zoom != null ? Math.max(0, Math.min(18, Math.round(zoom))) : null,
     };
 }
 
-function writeUrlState({ lat, lon, cmpLat, cmpLon }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -456,7 +458,11 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon }) {
     set("lon", lon, 4);
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
-    const qs = p.toString();
+    set("zoom", zoom);
+    const order = ["lat", "lon", "cmpLat", "cmpLon"];
+    const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
+    const sorted = [...p].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+    const qs = new URLSearchParams(sorted).toString();
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
 }
 
@@ -478,7 +484,7 @@ async function init() {
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
     const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
-    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], 11);
+    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], urlState.zoom != null ? urlState.zoom : 11);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18,
@@ -618,8 +624,10 @@ async function init() {
             lon: marker ? marker.getLatLng().lng : null,
             cmpLat: marker2 ? marker2.getLatLng().lat : null,
             cmpLon: marker2 ? marker2.getLatLng().lng : null,
+            zoom: map.getZoom(),
         });
     }
+    map.on("zoomend", syncUrl);
 
     // Dive site dropdowns — populate both selects with the same site options
     const diveSitesSelect = document.getElementById("dive-sites-select");
