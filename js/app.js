@@ -23,6 +23,10 @@ const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
 const DEFAULT_ZOOM = 11;
 const MAX_ZOOM = 18;
 
+// Valid values for the `charts` URL param (matches the `data-chart` attribute
+// on each `.chart-container` in index.html).
+const CHART_NAMES = ["height", "period", "dir", "tide"];
+
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const MAX_WAVE_HEIGHT = 12;
@@ -442,6 +446,21 @@ function readUrlState() {
         const n = parseFloat(v);
         return isFinite(n) ? n : null;
     };
+    // Treat the param as on when present, except for explicit "0" / "false".
+    const bool = (k) => {
+        const v = p.get(k);
+        if (v == null) return false;
+        return v !== "0" && v.toLowerCase() !== "false";
+    };
+    // Comma-separated whitelist, filtered to recognized values; null if absent.
+    const list = (k, valid) => {
+        const v = p.get(k);
+        if (v == null) return null;
+        return v
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => valid.includes(s));
+    };
     const zoom = num("zoom");
     return {
         lat: num("lat"),
@@ -449,6 +468,13 @@ function readUrlState() {
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
+        charts: list("charts", CHART_NAMES),
+        hideMap: bool("hideMap"),
+        hideSidebar: bool("hideSidebar"),
+        hideHeader: bool("hideHeader"),
+        hideSiteSelector: bool("hideSiteSelector"),
+        hideTimeControl: bool("hideTimeControl"),
+        hideFooter: bool("hideFooter"),
     };
 }
 
@@ -481,6 +507,19 @@ async function init() {
     initData(data);
 
     const urlState = readUrlState();
+
+    document.body.classList.toggle("hide-map", urlState.hideMap);
+    document.body.classList.toggle("hide-sidebar", urlState.hideSidebar);
+    document.body.classList.toggle("hide-header", urlState.hideHeader);
+    document.body.classList.toggle("hide-site-selector", urlState.hideSiteSelector);
+    document.body.classList.toggle("hide-time-control", urlState.hideTimeControl);
+    document.body.classList.toggle("hide-footer", urlState.hideFooter);
+
+    if (urlState.charts) {
+        for (const el of document.querySelectorAll(".chart-container[data-chart]")) {
+            if (!urlState.charts.includes(el.dataset.chart)) el.style.display = "none";
+        }
+    }
 
     const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;

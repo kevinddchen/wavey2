@@ -305,3 +305,26 @@ body.resizing {
         border-top: 1px solid #1d3556;
     }
 }
+
+/* ── Embed toggles (hide* URL params) ── */
+
+body.hide-map #map-panel,
+body.hide-sidebar #sidebar,
+body.hide-map #resizer,
+body.hide-sidebar #resizer {
+    display: none;
+}
+body.hide-map #app,
+body.hide-sidebar #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+}
+body.hide-sidebar #map-panel {
+    height: auto;
+}
+body.hide-header #info-panel,
+body.hide-site-selector #dive-sites,
+body.hide-time-control #time-control,
+body.hide-footer #github-link {
+    display: none;
+}
