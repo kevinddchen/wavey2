@@ -19,6 +19,10 @@ const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONAST
 // The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
 const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
 
+// Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
+const DEFAULT_ZOOM = 11;
+const MAX_ZOOM = 18;
+
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const MAX_WAVE_HEIGHT = 12;
@@ -444,7 +448,7 @@ function readUrlState() {
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
-        zoom: zoom != null ? Math.max(0, Math.min(18, Math.round(zoom))) : null,
+        zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
     };
 }
 
@@ -484,10 +488,13 @@ async function init() {
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
     const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
-    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], urlState.zoom != null ? urlState.zoom : 11);
+    const map = L.map("map").setView(
+        [initialMarkerLat, initialMarkerLon],
+        urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
+    );
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18,
+        maxZoom: MAX_ZOOM,
     }).addTo(map);
     const mapBounds = [
         [grid.lat_min, grid.lon_min],
