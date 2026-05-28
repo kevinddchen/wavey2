@@ -463,6 +463,7 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
     set("zoom", zoom);
+    // NOTE: URL params are sorted with lat/lon/cmpLat/cmpLon first, then the others alphahetically
     const order = ["lat", "lon", "cmpLat", "cmpLon"];
     const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
     const sorted = [...p].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
