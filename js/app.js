@@ -461,12 +461,14 @@ function readUrlState() {
             .map((s) => s.trim())
             .filter((s) => valid.includes(s));
     };
+    const t = num("t");
     const zoom = num("zoom");
     return {
         lat: num("lat"),
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
+        t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
@@ -565,7 +567,7 @@ async function init() {
         setTimeCursor(charts, i);
     }
 
-    applyTime(0);
+    applyTime(urlState.t != null ? Math.min(urlState.t, nt - 1) : 0);
     slider.addEventListener("input", () => applyTime(+slider.value));
 
     let playing = false,

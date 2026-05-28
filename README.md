@@ -32,6 +32,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `lon`              | Longitude of the blue (primary) marker                  |
 | `cmpLat`           | Latitude of the gold (comparison) marker                |
 | `cmpLon`           | Longitude of the gold (comparison) marker               |
+| `t`                | Initial time-slider index (integer)                     |
 | `zoom`             | Initial map zoom level (integer, 0–18)                  |
 | `charts`           | Comma-separated whitelist from `height,period,dir,tide` |
 | `hideMap`          | Hide the map panel                                      |
