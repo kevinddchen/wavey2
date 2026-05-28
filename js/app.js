@@ -19,6 +19,10 @@ const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONAST
 // The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
 const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
 
+// Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
+const DEFAULT_ZOOM = 11;
+const MAX_ZOOM = 18;
+
 // ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 
 const MAX_WAVE_HEIGHT = 12;
@@ -438,15 +442,17 @@ function readUrlState() {
         const n = parseFloat(v);
         return isFinite(n) ? n : null;
     };
+    const zoom = num("zoom");
     return {
         lat: num("lat"),
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
+        zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
     };
 }
 
-function writeUrlState({ lat, lon, cmpLat, cmpLon }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -456,7 +462,12 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon }) {
     set("lon", lon, 4);
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
-    const qs = p.toString();
+    set("zoom", zoom);
+    // NOTE: URL params are sorted with lat/lon/cmpLat/cmpLon first, then the others alphahetically
+    const order = ["lat", "lon", "cmpLat", "cmpLon"];
+    const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
+    const sorted = [...p].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+    const qs = new URLSearchParams(sorted).toString();
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
 }
 
@@ -478,10 +489,13 @@ async function init() {
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
     const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
-    const map = L.map("map").setView([initialMarkerLat, initialMarkerLon], 11);
+    const map = L.map("map").setView(
+        [initialMarkerLat, initialMarkerLon],
+        urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
+    );
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18,
+        maxZoom: MAX_ZOOM,
     }).addTo(map);
     const mapBounds = [
         [grid.lat_min, grid.lon_min],
@@ -618,8 +632,10 @@ async function init() {
             lon: marker ? marker.getLatLng().lng : null,
             cmpLat: marker2 ? marker2.getLatLng().lat : null,
             cmpLon: marker2 ? marker2.getLatLng().lng : null,
+            zoom: map.getZoom(),
         });
     }
+    map.on("zoomend", syncUrl);
 
     // Dive site dropdowns — populate both selects with the same site options
     const diveSitesSelect = document.getElementById("dive-sites-select");
