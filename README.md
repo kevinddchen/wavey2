@@ -34,6 +34,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `cmpLon`           | Longitude of the gold (comparison) marker               |
 | `t`                | Initial time-slider index (integer)                     |
 | `zoom`             | Initial map zoom level (integer, 0–18)                  |
+| `units`            | Display units — `ft` (default) or `m`                   |
 | `charts`           | Comma-separated whitelist from `height,period,dir,tide` |
 | `hideMap`          | Hide the map panel                                      |
 | `hideSidebar`      | Hide the sidebar                                        |
