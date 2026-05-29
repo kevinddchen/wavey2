@@ -529,9 +529,9 @@ function readUrlState() {
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
-        t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         forecast: p.get("forecast"),
+        t: t != null ? Math.max(0, Math.round(t)) : null,
         units: p.get("units"),
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
@@ -557,6 +557,7 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, forecast }) {
     // `forecast` is a string run id, not numeric — set it directly.
     if (forecast == null) p.delete("forecast");
     else p.set("forecast", forecast);
+
     // NOTE: some URL params are sorted in a particular order, then the others follow alphahetically
     const order = ["lat", "lon", "cmpLat", "cmpLon", "zoom", "forecast"];
     const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
