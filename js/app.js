@@ -232,25 +232,34 @@ function initData(data) {
 const GRID_COLOR = "#1d3556";
 const TICK_COLOR = "#527090";
 
-// Plugin: yellow dashed vertical line at current time
+// Plugin: yellow dashed vertical line at the slider's current time, plus a
+// fainter solid line at the client's wall-clock "now" (if it falls within the
+// forecast window). `_currentIdx` (integer) and `_nowIdx` (fractional, or null)
+// are set on the chart instance.
 Chart.register({
     id: "timeCursor",
     afterDatasetsDraw(chart) {
-        const idx = chart._currentIdx;
-        if (idx == null || !chart.scales.x) return;
-        const x = chart.scales.x.getPixelForValue(idx);
+        if (!chart.scales.x) return;
         const { top, bottom, left, right } = chart.chartArea;
-        if (x < left || x > right) return;
         const ctx = chart.ctx;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(x, top);
-        ctx.lineTo(x, bottom);
-        ctx.strokeStyle = "rgba(255,215,0,0.8)";
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.restore();
+
+        const drawLine = (idx, color, width, dash) => {
+            if (idx == null) return;
+            const x = chart.scales.x.getPixelForValue(idx);
+            if (x < left || x > right) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, bottom);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.setLineDash(dash);
+            ctx.stroke();
+            ctx.restore();
+        };
+
+        drawLine(chart._nowIdx, "rgba(109,184,232,0.5)", 1, [3, 3]);
+        drawLine(chart._currentIdx, "rgba(255,215,0,0.8)", 1.5, [4, 4]);
     },
 });
 
@@ -329,13 +338,28 @@ function makeChart(id, times, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
     return new Chart(document.getElementById(id), cfg);
 }
 
+// Fractional index into `times` for the client's current wall-clock time, or
+// null if "now" is outside the forecast window.
+function nowFractionalIdx(times) {
+    const now = Date.now();
+    const ts = times.map((t) => new Date(t).getTime());
+    if (now < ts[0] || now > ts[ts.length - 1]) return null;
+    for (let i = 0; i < ts.length - 1; i++) {
+        if (now >= ts[i] && now <= ts[i + 1]) return i + (now - ts[i]) / (ts[i + 1] - ts[i]);
+    }
+    return null;
+}
+
 function initCharts(times) {
-    return {
+    const charts = {
         height: makeChart("chart-height", times, UNIT, 0, null, null),
         period: makeChart("chart-period", times, "sec", 0, null, null),
         dir: makeChart("chart-dir", times, "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 }),
         tide: makeChart("chart-tide", times, UNIT, null, null, null),
     };
+    const nowIdx = nowFractionalIdx(times);
+    Object.values(charts).forEach((c) => (c._nowIdx = nowIdx));
+    return charts;
 }
 
 function updateCharts(charts, data, gridIdx, gridIdx2, tIdx) {
