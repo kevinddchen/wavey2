@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 import requests
@@ -16,6 +17,32 @@ _CG3 = "CG3"
 _CHUNK_SIZE = 8192
 
 
+def _iter_forecast_urls() -> Iterator[str]:
+    """
+    Yield URLs for every available Monterey bay "CG3" forecast, newest first.
+
+    Walks each forecast date (newest first) and, within each, each run hour
+    (newest first), yielding a URL for every run that has a CG3 forecast. Lazy,
+    so callers that only need the most recent can stop after the first item.
+
+    Raises:
+        HTTPError: If accessing the index website returns an error.
+    """
+
+    dates = _list_dates()
+    LOG.info(f"Found NWFS forecasts: {dates}")
+
+    for date in dates:
+        LOG.info(f"Looking in '{date}'...")
+        try:
+            times = _list_times(date)
+        except requests.HTTPError:
+            continue
+        for time in times:
+            if _check_time(date=date, time=time):
+                yield _get_url(date=date, time=time)
+
+
 def get_most_recent_forecast() -> str:
     """
     Get most recent NWFS forecast data for Monterey bay.
@@ -27,39 +54,27 @@ def get_most_recent_forecast() -> str:
         HTTPError: If accessing website returns error.
     """
 
-    # 1. List dates with forecasts
-    dates = _list_dates()
-    LOG.info(f"Found NWFS forecasts: {dates}")
-
-    most_recent_date: str | None = None
-    most_recent_time: str | None = None
-
-    # 2. For each date, look for Monterey bay forecasts
-    for date in dates:
-        LOG.info(f"Looking in '{date}'...")
-        try:
-            times = _list_times(date)
-        except requests.HTTPError:
-            continue
-
-        # 3. For each time, check if "CG3" forecast is available
-        for time in times:
-            if _check_time(date=date, time=time):
-                most_recent_date = date
-                most_recent_time = time
-                break
-
-        # propagate break out of for-loop above
-        if most_recent_date is not None:
-            break
-
-    assert most_recent_date is not None and most_recent_time is not None, (
-        "Unexpected: could not find any forecasts for Monterey bay."
-    )
-
-    url = _get_url(date=most_recent_date, time=most_recent_time)
+    url = next(_iter_forecast_urls(), None)
+    assert url is not None, "Unexpected: could not find any forecasts for Monterey bay."
     LOG.info(f"Found most recent forecast: {url}")
     return url
+
+
+def get_all_available_forecasts() -> list[str]:
+    """
+    Get all available Monterey bay "CG3" forecasts retained on the server.
+
+    Unlike `get_all_forecasts`, this is not restricted to a single run hour: it
+    returns every (date, time) run that has a CG3 forecast, newest first.
+
+    Returns:
+        List of URLs to GRIB files, newest first.
+
+    Raises:
+        HTTPError: If accessing the index website returns an error.
+    """
+
+    return list(_iter_forecast_urls())
 
 
 def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
@@ -187,37 +202,6 @@ def get_all_forecasts(time: str = "06") -> list[str]:
     good_dates = [date for date in dates if _check_time(date=date, time=time)]
 
     return [_get_url(date=date, time=time) for date in good_dates]
-
-
-def get_all_available_forecasts() -> list[str]:
-    """
-    Get all available Monterey bay "CG3" forecasts retained on the server.
-
-    Unlike `get_all_forecasts`, this is not restricted to a single run hour: it
-    returns every (date, time) run that has a CG3 forecast.
-
-    Returns:
-        List of URLs to GRIB files, newest first.
-
-    Raises:
-        HTTPError: If accessing the index website returns an error.
-    """
-
-    dates = _list_dates()
-    LOG.info(f"Found NWFS forecast dates: {dates}")
-
-    urls: list[str] = []
-    for date in dates:
-        LOG.info(f"Looking in '{date}'...")
-        try:
-            times = _list_times(date)
-        except requests.HTTPError:
-            continue
-        for time in times:
-            if _check_time(date=date, time=time):
-                urls.append(_get_url(date=date, time=time))
-
-    return urls
 
 
 def download_forecast(url: str, dir: Path | None = None, path: Path | None = None) -> Path:
