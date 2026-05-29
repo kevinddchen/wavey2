@@ -132,17 +132,40 @@ function nearestPoint(grid, lat, lon) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
-async function loadData() {
+// Fetch + gunzip + decode a single forecast binary at `path`.
+// Pre-gzipped so the wire transfer stays small even when the host doesn't
+// auto-compress application/octet-stream (e.g. GitHub Pages).
+async function fetchForecast(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(`fetch ${path}: ${r.status}`);
+    const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
+    const buf = await new Response(decompressed).arrayBuffer();
+    return decodeBinary(buf);
+}
+
+// Resolve which forecast run to show and decode it. Prefers the multi-run
+// manifest (`data/index.json`); falls back to the legacy single
+// `data/waves.bin.gz` for deploys that predate the manifest.
+// Returns { data, forecasts, selectedId }: `forecasts` is the manifest list
+// (empty in legacy/empty modes) and `selectedId` is the chosen run's id (or null).
+async function loadData(forecastId) {
     try {
-        const r = await fetch("data/waves.bin.gz");
+        const r = await fetch("data/index.json");
         if (!r.ok) throw new Error();
-        // Pre-gzipped so the wire transfer stays small even when the host
-        // doesn't auto-compress application/octet-stream (e.g. GitHub Pages).
-        const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
-        const buf = await new Response(decompressed).arrayBuffer();
-        return decodeBinary(buf);
+        const forecasts = await r.json();
+        if (Array.isArray(forecasts) && forecasts.length > 0) {
+            const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
+            const data = await fetchForecast("data/" + sel.file);
+            return { data, forecasts, selectedId: sel.id };
+        }
     } catch {
-        return generateEmptyData();
+        // Fall through to the legacy single-file path.
+    }
+    try {
+        const data = await fetchForecast("data/waves.bin.gz");
+        return { data, forecasts: [], selectedId: null };
+    } catch {
+        return { data: generateEmptyData(), forecasts: [], selectedId: null };
     }
 }
 
@@ -515,6 +538,7 @@ function readUrlState() {
         cmpLon: num("cmpLon"),
         t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
+        forecast: p.get("forecast"),
         units: p.get("units"),
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
@@ -526,7 +550,7 @@ function readUrlState() {
     };
 }
 
-function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, t, forecast }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -537,6 +561,10 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
     set("zoom", zoom);
+    set("t", t);
+    // `forecast` is a string run id, not numeric — set it directly.
+    if (forecast == null) p.delete("forecast");
+    else p.set("forecast", forecast);
     // NOTE: URL params are sorted with lat/lon/cmpLat/cmpLon first, then the others alphahetically
     const order = ["lat", "lon", "cmpLat", "cmpLon"];
     const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
@@ -548,11 +576,11 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-    const data = await loadData();
+    const urlState = readUrlState();
+    const { data, forecasts, selectedId } = await loadData(urlState.forecast);
     const { times, grid } = data.metadata;
     const nt = times.length;
 
-    const urlState = readUrlState();
     if (urlState.units != null) setUnits(urlState.units);
     initData(data);
 
@@ -572,6 +600,29 @@ async function init() {
     const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;
     document.getElementById("status").textContent = `Forecast ${forecastAge} · ${data.metadata.source}`;
+
+    // Forecast selector — lists the available runs (newest first). Switching sets
+    // the `forecast` URL param and reloads; all marker/time/zoom/units state is
+    // already URL-encoded, so it survives the reload. Hidden unless there's a
+    // choice to make (≥2 runs).
+    const forecastControl = document.getElementById("forecast-control");
+    const forecastSelect = document.getElementById("forecast-select");
+    if (forecasts.length > 1) {
+        for (const f of forecasts) {
+            const opt = document.createElement("option");
+            opt.value = f.id;
+            opt.textContent = `${formatLocalTime(new Date(f.forecast_time), FULL_TIME_FIELDS)} PT`;
+            forecastSelect.appendChild(opt);
+        }
+        forecastSelect.value = selectedId;
+        forecastSelect.addEventListener("change", () => {
+            const p = new URLSearchParams(window.location.search);
+            p.set("forecast", forecastSelect.value);
+            window.location.search = p.toString(); // navigates → full reload
+        });
+    } else {
+        forecastControl.style.display = "none";
+    }
 
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
@@ -615,6 +666,8 @@ async function init() {
 
     applyTime(urlState.t != null ? Math.min(urlState.t, nt - 1) : 0);
     slider.addEventListener("input", () => applyTime(+slider.value));
+    // Persist the time index on release (not on every `input` frame).
+    slider.addEventListener("change", () => syncUrl());
 
     let playing = false,
         timer = null;
@@ -640,9 +693,11 @@ async function init() {
         } else if (e.key === "ArrowLeft") {
             e.preventDefault();
             applyTime((tIdx - 1 + nt) % nt);
+            syncUrl();
         } else if (e.key === "ArrowRight") {
             e.preventDefault();
             applyTime((tIdx + 1) % nt);
+            syncUrl();
         }
     });
 
@@ -666,6 +721,7 @@ async function init() {
         });
     });
     window.addEventListener("mouseup", () => {
+        if (chartDragging) syncUrl(); // persist the scrubbed time index
         chartDragging = false;
     });
 
@@ -720,6 +776,8 @@ async function init() {
             cmpLat: marker2 ? marker2.getLatLng().lat : null,
             cmpLon: marker2 ? marker2.getLatLng().lng : null,
             zoom: map.getZoom(),
+            t: tIdx,
+            forecast: selectedId,
         });
     }
     map.on("zoomend", syncUrl);

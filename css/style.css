@@ -200,6 +200,35 @@ body.resizing {
     min-height: 16px;
 }
 
+#forecast-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 4px;
+}
+#forecast-control label {
+    font-size: 11px;
+    color: #52718f;
+    flex-shrink: 0;
+}
+#forecast-control select {
+    flex: 1;
+    min-width: 0;
+    background: #0c1326;
+    color: #dde6f0;
+    border: 1px solid #1d3556;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+#forecast-control select:hover,
+#forecast-control select:focus {
+    outline: none;
+    border-color: #2585c4;
+}
+
 /* ── GitHub link ── */
 
 #github-link {

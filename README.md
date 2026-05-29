@@ -33,6 +33,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `cmpLat`           | Latitude of the gold (comparison) marker                |
 | `cmpLon`           | Longitude of the gold (comparison) marker               |
 | `t`                | Initial time-slider index (integer)                     |
+| `forecast`         | Id of the forecast run to show (e.g. `20260528_1200`)   |
 | `zoom`             | Initial map zoom level (integer, 0–18)                  |
 | `units`            | Display units — `ft` (default) or `m`                   |
 | `charts`           | Comma-separated whitelist from `height,period,dir,tide` |
