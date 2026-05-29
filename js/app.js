@@ -143,27 +143,20 @@ async function fetchForecast(path) {
     return decodeBinary(buf);
 }
 
-// Resolve which forecast run to show and decode it. Prefers the multi-run
-// manifest (`data/index.json`); falls back to the legacy single
-// `data/waves.bin.gz` for deploys that predate the manifest.
+// Resolve which forecast run to show and decode it, reading the run manifest
+// (`data/index.json`). Falls back to empty data if the manifest is missing,
+// empty, or malformed, or if the chosen run's binary fails to load.
 // Returns { data, forecasts, selectedId }: `forecasts` is the manifest list
-// (empty in legacy/empty modes) and `selectedId` is the chosen run's id (or null).
+// (empty when falling back) and `selectedId` is the chosen run's id (or null).
 async function loadData(forecastId) {
     try {
         const r = await fetch("data/index.json");
         if (!r.ok) throw new Error();
         const forecasts = await r.json();
-        if (Array.isArray(forecasts) && forecasts.length > 0) {
-            const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
-            const data = await fetchForecast("data/" + sel.file);
-            return { data, forecasts, selectedId: sel.id };
-        }
-    } catch {
-        // Fall through to the legacy single-file path.
-    }
-    try {
-        const data = await fetchForecast("data/waves.bin.gz");
-        return { data, forecasts: [], selectedId: null };
+        if (!Array.isArray(forecasts) || forecasts.length === 0) throw new Error();
+        const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
+        const data = await fetchForecast("data/" + sel.file);
+        return { data, forecasts, selectedId: sel.id };
     } catch {
         return { data: generateEmptyData(), forecasts: [], selectedId: null };
     }
