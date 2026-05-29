@@ -543,7 +543,7 @@ function readUrlState() {
     };
 }
 
-function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, t, forecast }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, forecast }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -554,12 +554,11 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, t, forecast }) {
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
     set("zoom", zoom);
-    set("t", t);
     // `forecast` is a string run id, not numeric — set it directly.
     if (forecast == null) p.delete("forecast");
     else p.set("forecast", forecast);
-    // NOTE: URL params are sorted with lat/lon/cmpLat/cmpLon first, then the others alphahetically
-    const order = ["lat", "lon", "cmpLat", "cmpLon"];
+    // NOTE: some URL params are sorted in a particular order, then the others follow alphahetically
+    const order = ["lat", "lon", "cmpLat", "cmpLon", "zoom", "forecast"];
     const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
     const sorted = [...p].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
     const qs = new URLSearchParams(sorted).toString();
@@ -659,8 +658,6 @@ async function init() {
 
     applyTime(urlState.t != null ? Math.min(urlState.t, nt - 1) : 0);
     slider.addEventListener("input", () => applyTime(+slider.value));
-    // Persist the time index on release (not on every `input` frame).
-    slider.addEventListener("change", () => syncUrl());
 
     let playing = false,
         timer = null;
@@ -686,11 +683,9 @@ async function init() {
         } else if (e.key === "ArrowLeft") {
             e.preventDefault();
             applyTime((tIdx - 1 + nt) % nt);
-            syncUrl();
         } else if (e.key === "ArrowRight") {
             e.preventDefault();
             applyTime((tIdx + 1) % nt);
-            syncUrl();
         }
     });
 
@@ -714,7 +709,6 @@ async function init() {
         });
     });
     window.addEventListener("mouseup", () => {
-        if (chartDragging) syncUrl(); // persist the scrubbed time index
         chartDragging = false;
     });
 
@@ -769,7 +763,6 @@ async function init() {
             cmpLat: marker2 ? marker2.getLatLng().lat : null,
             cmpLon: marker2 ? marker2.getLatLng().lng : null,
             zoom: map.getZoom(),
-            t: tIdx,
             forecast: selectedId,
         });
     }
