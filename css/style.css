@@ -330,7 +330,7 @@ body.hide-sidebar #map-panel {
     height: auto;
 }
 body.hide-header #info-panel,
-body.hide-site-selector #dive-sites,
+body.hide-selectors #dive-sites,
 body.hide-time-control #time-control,
 body.hide-footer #github-link {
     display: none;

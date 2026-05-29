@@ -537,7 +537,7 @@ function readUrlState() {
         hideMap: bool("hideMap"),
         hideSidebar: bool("hideSidebar"),
         hideHeader: bool("hideHeader"),
-        hideSiteSelector: bool("hideSiteSelector"),
+        hideSelectors: bool("hideSelectors"),
         hideTimeControl: bool("hideTimeControl"),
         hideFooter: bool("hideFooter"),
     };
@@ -580,7 +580,7 @@ async function init() {
     document.body.classList.toggle("hide-map", urlState.hideMap);
     document.body.classList.toggle("hide-sidebar", urlState.hideSidebar);
     document.body.classList.toggle("hide-header", urlState.hideHeader);
-    document.body.classList.toggle("hide-site-selector", urlState.hideSiteSelector);
+    document.body.classList.toggle("hide-selectors", urlState.hideSelectors);
     document.body.classList.toggle("hide-time-control", urlState.hideTimeControl);
     document.body.classList.toggle("hide-footer", urlState.hideFooter);
 
