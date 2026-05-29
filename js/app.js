@@ -38,10 +38,12 @@ function setUnits(units) {
         UNIT = "m";
         UNIT_SCALE = 1;
         MAX_WAVE_HEIGHT = 4;
-    } else {
+    } else if (units === "ft") {
         UNIT = "ft";
         UNIT_SCALE = 3.28084;
         MAX_WAVE_HEIGHT = 12;
+    } else {
+        console.error(`setUnits: invalid value ${JSON.stringify(units)}, expected "m" or "ft"`);
     }
 }
 
@@ -490,7 +492,7 @@ function readUrlState() {
         t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         charts: list("charts", CHART_NAMES),
-        units: p.get("units") === "m" ? "m" : p.get("units") === "ft" ? "ft" : null,
+        units: p.get("units"),
         hideMap: bool("hideMap"),
         hideSidebar: bool("hideSidebar"),
         hideHeader: bool("hideHeader"),
@@ -527,7 +529,7 @@ async function init() {
     const nt = times.length;
 
     const urlState = readUrlState();
-    setUnits(urlState.units);
+    if (urlState.units != null) setUnits(urlState.units);
     initData(data);
 
     document.body.classList.toggle("hide-map", urlState.hideMap);
