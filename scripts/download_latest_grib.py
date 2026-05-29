@@ -265,29 +265,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Download Monterey Bay NWPS GRIB2 forecast(s).")
     parser.add_argument(
         "--all",
+        "-a",
         action="store_true",
-        help="Download every available forecast run (saved under --dir), printing one path per line",
+        help="Download every available forecast run, printing one path per line",
     )
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--dir", "-d", type=Path, default=None, help="Directory to save the file (default: cwd)")
-    group.add_argument("--path", "-p", type=Path, default=None, help="Full path to save the file to")
+    parser.add_argument(
+        "--dir",
+        "-d",
+        type=Path,
+        default=None,
+        help="Directory to save the file (default: cwd)",
+    )
     args = parser.parse_args()
 
     if args.all:
         urls = get_all_available_forecasts()
         LOG.info(f"Found {len(urls)} forecast(s)")
-        for url in urls:
-            try:
-                file_path = download_forecast(url, dir=args.dir)
-            except requests.HTTPError as e:
-                LOG.warning(f"Failed to download '{url}': {e}")
-                continue
-            print(file_path)
-        return
+    else:
+        urls = [get_most_recent_forecast()]
 
-    url = get_most_recent_forecast()
-    file_path = download_forecast(url, dir=args.dir, path=args.path)
-    print(file_path)
+    for url in urls:
+        try:
+            download_forecast(url, dir=args.dir)
+        except requests.HTTPError as e:
+            LOG.warning(f"Failed to download '{url}': {e}")
+            continue
 
 
 if __name__ == "__main__":
