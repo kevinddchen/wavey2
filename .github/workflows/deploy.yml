@@ -51,8 +51,12 @@ jobs:
 
       - name: Build site
         run: |
-          GRIB=$(uv run scripts/download_latest_grib.py)
-          uv run python scripts/grib2bin.py "$GRIB"
+          mkdir -p gribs
+          uv run scripts/download_latest_grib.py --all --dir gribs
+          for f in gribs/*.grib2; do
+            uv run python scripts/grib2bin.py "$f" || echo "WARNING: failed to convert $f"
+          done
+          uv run python scripts/build_index.py
           mkdir _site
           cp index.html favicon.svg _site/
           cp -r css js data _site/

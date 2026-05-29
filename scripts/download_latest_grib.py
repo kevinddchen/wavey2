@@ -189,6 +189,37 @@ def get_all_forecasts(time: str = "06") -> list[str]:
     return [_get_url(date=date, time=time) for date in good_dates]
 
 
+def get_all_available_forecasts() -> list[str]:
+    """
+    Get all available Monterey bay "CG3" forecasts retained on the server.
+
+    Unlike `get_all_forecasts`, this is not restricted to a single run hour: it
+    returns every (date, time) run that has a CG3 forecast.
+
+    Returns:
+        List of URLs to GRIB files, newest first.
+
+    Raises:
+        HTTPError: If accessing the index website returns an error.
+    """
+
+    dates = _list_dates()
+    LOG.info(f"Found NWFS forecast dates: {dates}")
+
+    urls: list[str] = []
+    for date in dates:
+        LOG.info(f"Looking in '{date}'...")
+        try:
+            times = _list_times(date)
+        except requests.HTTPError:
+            continue
+        for time in times:
+            if _check_time(date=date, time=time):
+                urls.append(_get_url(date=date, time=time))
+
+    return urls
+
+
 def download_forecast(url: str, dir: Path | None = None, path: Path | None = None) -> Path:
     """
     Download NWFS forecast data to disk.
@@ -231,11 +262,28 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser(description="Download the latest Monterey Bay NWPS GRIB2 forecast.")
+    parser = argparse.ArgumentParser(description="Download Monterey Bay NWPS GRIB2 forecast(s).")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download every available forecast run (saved under --dir), printing one path per line",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--dir", "-d", type=Path, default=None, help="Directory to save the file (default: cwd)")
     group.add_argument("--path", "-p", type=Path, default=None, help="Full path to save the file to")
     args = parser.parse_args()
+
+    if args.all:
+        urls = get_all_available_forecasts()
+        LOG.info(f"Found {len(urls)} forecast(s)")
+        for url in urls:
+            try:
+                file_path = download_forecast(url, dir=args.dir)
+            except requests.HTTPError as e:
+                LOG.warning(f"Failed to download '{url}': {e}")
+                continue
+            print(file_path)
+        return
 
     url = get_most_recent_forecast()
     file_path = download_forecast(url, dir=args.dir, path=args.path)

@@ -62,6 +62,7 @@ Quick start
 import argparse
 import gzip
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -289,6 +290,14 @@ def write_binary(
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
+def default_out_path(input_path: Path) -> Path:
+    """Derive `data/waves_<run_id>.bin.gz` from an `mtr_nwps_CG3_<run_id>.grib2` name."""
+    m = re.search(r"(\d{8}_\d{4})", input_path.name)
+    if not m:
+        sys.exit(f"ERROR: could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; pass --out explicitly")
+    return Path("data") / f"waves_{m.group(1)}.bin.gz"
+
+
 def main() -> None:
     # fmt: off
     ap = argparse.ArgumentParser(
@@ -298,8 +307,8 @@ def main() -> None:
     ap.add_argument("input", help="Input .grib2 file")
     ap.add_argument("--list", action="store_true",
                     help="List available variables and exit")
-    ap.add_argument("--out", default="data/waves.bin.gz",
-                    help="Output path (default: data/waves.bin.gz)")
+    ap.add_argument("--out", default=None,
+                    help="Output path (default: data/waves_<run_id>.bin.gz, derived from the input filename)")
     ap.add_argument("--step", type=int, default=1, metavar="N",
                     help="Keep every Nth time step, e.g. --step 3 for 3-hourly (default: 1)")
     args = ap.parse_args()
@@ -386,7 +395,7 @@ def main() -> None:
     else:
         arrays.append(("water_level", empty("water_level")))
 
-    out_path = Path(args.out)
+    out_path = Path(args.out) if args.out else default_out_path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_binary(out_path, metadata, arrays)
 
