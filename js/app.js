@@ -34,14 +34,14 @@ let UNIT_SCALE = 3.28084;
 let MAX_WAVE_HEIGHT = 12; // upper bound of the wave-height color scale, in `UNIT`
 
 function setUnits(units) {
-    if (units === "m") {
-        UNIT = "m";
-        UNIT_SCALE = 1;
-        MAX_WAVE_HEIGHT = 4;
-    } else if (units === "ft") {
+    if (units === "ft") {
         UNIT = "ft";
         UNIT_SCALE = 3.28084;
         MAX_WAVE_HEIGHT = 12;
+    } else if (units === "m") {
+        UNIT = "m";
+        UNIT_SCALE = 1;
+        MAX_WAVE_HEIGHT = 4;
     } else {
         console.error(`setUnits: invalid value ${JSON.stringify(units)}, expected "m" or "ft"`);
     }
