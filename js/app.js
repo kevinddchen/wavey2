@@ -232,10 +232,10 @@ function generateEmptyData() {
 
 function initData(data) {
     for (const series of data.wave_height) {
-        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = +(series[i] * UNIT_SCALE).toFixed(2);
+        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] *= UNIT_SCALE;
     }
     for (const series of data.water_level) {
-        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = +(series[i] * UNIT_SCALE).toFixed(2);
+        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] *= UNIT_SCALE;
     }
     for (const series of data.wave_dir) {
         // need to add 180° because `wave_dir` points toward the wave origin
