@@ -37,10 +37,6 @@
         <div id="info-panel">
           <h1>Monterey Bay Dive Conditions</h1>
           <p id="status"></p>
-          <div id="forecast-control">
-            <label for="forecast-select">Forecast run:</label>
-            <select id="forecast-select"></select>
-          </div>
           <div id="selected-info">
             <span id="selected-coords"></span>
           </div>
@@ -52,6 +48,7 @@
 
         <div id="charts-panel">
           <div class="chart-container" id="dive-sites">
+            <select id="forecast-select" class="forecast" aria-label="Forecast run"></select>
             <select id="dive-sites-select" class="primary">
               <option value="" disabled selected>Primary site&hellip;</option>
             </select>

@@ -598,7 +598,6 @@ async function init() {
     // the `forecast` URL param and reloads; all marker/time/zoom/units state is
     // already URL-encoded, so it survives the reload. Hidden unless there's a
     // choice to make (≥2 runs).
-    const forecastControl = document.getElementById("forecast-control");
     const forecastSelect = document.getElementById("forecast-select");
     if (forecasts.length > 1) {
         for (const f of forecasts) {
@@ -614,7 +613,7 @@ async function init() {
             window.location.search = p.toString(); // navigates → full reload
         });
     } else {
-        forecastControl.style.display = "none";
+        forecastSelect.style.display = "none";
     }
 
     // Map — centers on the initial marker location
