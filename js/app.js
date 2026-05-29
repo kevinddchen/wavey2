@@ -1,6 +1,5 @@
 "use strict";
 
-const FEET_PER_METER = 3.28084;
 const LOCAL_TIMEZONE = "America/Los_Angeles";
 
 // Marker / chart series colors
@@ -27,9 +26,28 @@ const MAX_ZOOM = 18;
 // on each `.chart-container` in index.html).
 const CHART_NAMES = ["height", "period", "dir", "tide"];
 
-// ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
+// Display units — set once at startup via `setUnits` based on the `units` URL
+// param ("ft" default, "m" for meters). NWPS data arrives in meters, so the
+// scale factor is applied in `initData`.
+let UNIT = "ft";
+let UNIT_SCALE = 3.28084;
+let MAX_WAVE_HEIGHT = 12; // upper bound of the wave-height color scale, in `UNIT`
 
-const MAX_WAVE_HEIGHT = 12;
+function setUnits(units) {
+    if (units === "ft") {
+        UNIT = "ft";
+        UNIT_SCALE = 3.28084;
+        MAX_WAVE_HEIGHT = 12;
+    } else if (units === "m") {
+        UNIT = "m";
+        UNIT_SCALE = 1;
+        MAX_WAVE_HEIGHT = 4;
+    } else {
+        console.error(`setUnits: invalid value ${JSON.stringify(units)}, expected "m" or "ft"`);
+    }
+}
+
+// ── Color scale (blue → cyan → yellow → red) ────────────────────────────────
 const STOPS = [
     [10, 40, 180], // deep blue
     [20, 110, 255], // bright blue
@@ -61,6 +79,11 @@ function drawLegend() {
     }
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const labels = document.querySelector("#legend .legend-labels");
+    if (labels) {
+        const mid = MAX_WAVE_HEIGHT / 2;
+        labels.innerHTML = `<span>0 ${UNIT}</span><span>${mid} ${UNIT}</span><span>${MAX_WAVE_HEIGHT}+ ${UNIT}</span>`;
+    }
 }
 
 // ── Heatmap rendering ────────────────────────────────────────────────────────
@@ -193,12 +216,10 @@ function generateEmptyData() {
 
 function initData(data) {
     for (const series of data.wave_height) {
-        for (let i = 0; i < series.length; i++)
-            if (series[i] != null) series[i] = +(series[i] * FEET_PER_METER).toFixed(2);
+        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = +(series[i] * UNIT_SCALE).toFixed(2);
     }
     for (const series of data.water_level) {
-        for (let i = 0; i < series.length; i++)
-            if (series[i] != null) series[i] = +(series[i] * FEET_PER_METER).toFixed(2);
+        for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = +(series[i] * UNIT_SCALE).toFixed(2);
     }
     for (const series of data.wave_dir) {
         // need to add 180° because `wave_dir` points toward the wave origin
@@ -310,10 +331,10 @@ function makeChart(id, times, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
 
 function initCharts(times) {
     return {
-        height: makeChart("chart-height", times, "ft", 0, null, null),
+        height: makeChart("chart-height", times, UNIT, 0, null, null),
         period: makeChart("chart-period", times, "sec", 0, null, null),
         dir: makeChart("chart-dir", times, "deg", 0, 360, (v) => `${v}°`, { stepSize: 90 }),
-        tide: makeChart("chart-tide", times, "ft", null, null, null),
+        tide: makeChart("chart-tide", times, UNIT, null, null, null),
     };
 }
 
@@ -470,6 +491,7 @@ function readUrlState() {
         cmpLon: num("cmpLon"),
         t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
+        units: p.get("units"),
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
         hideSidebar: bool("hideSidebar"),
@@ -506,9 +528,9 @@ async function init() {
     const { times, grid } = data.metadata;
     const nt = times.length;
 
-    initData(data);
-
     const urlState = readUrlState();
+    if (urlState.units != null) setUnits(urlState.units);
+    initData(data);
 
     document.body.classList.toggle("hide-map", urlState.hideMap);
     document.body.classList.toggle("hide-sidebar", urlState.hideSidebar);
