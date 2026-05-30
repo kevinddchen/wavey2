@@ -536,6 +536,7 @@ function readUrlState() {
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         forecast: p.get("forecast"),
         t: t != null ? Math.max(0, Math.round(t)) : null,
+        play: bool("play"),
         units: p.get("units"),
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
@@ -679,6 +680,9 @@ async function init() {
         }
     }
     playBtn.addEventListener("click", togglePlay);
+
+    // `play` URL param autostarts the animation on load.
+    if (urlState.play) togglePlay();
 
     // Keyboard shortcuts: space = play/pause, ←/→ = step. Skip when a form
     // control is focused so it doesn't fight the slider, selects, or buttons.
