@@ -74,19 +74,33 @@ uv venv
 uv sync --no-dev
 ```
 
-### Download latest GRIB2 file
+### Download GRIB2 files
 
 ```bash
-uv run python scripts/download_latest_grib.py
+# the single most recent run:
+uv run scripts/download_grib.py --out-dir gribs/
+# or every run still on the server:
+uv run scripts/download_grib.py --all --out-dir gribs/
 ```
 
 ### Convert data to binary
 
 ```bash
-uv run python scripts/grib2bin.py YOUR_FILE.grib2
+uv run scripts/grib2bin.py YOUR_FILE.grib2 --out-dir data/
 ```
 
-This creates a file `data/waves.bin.gz`. The uncompressed payload has the layout:
+This creates one file per run named `data/waves_<run_id>.bin.gz` (the `<run_id>`,
+e.g. `20260528_1200`, is parsed from the input filename). After converting all the
+runs you want available, build the manifest the website reads:
+
+```bash
+uv run scripts/build_index.py --dir data/  # writes data/index.json
+```
+
+`data/index.json` is a newest-first list of `{ id, file, forecast_time, source }`;
+the page fetches it to populate the forecast selector and pick which run to show
+(overridable with the `forecast` URL param). Each `waves_<run_id>.bin.gz` has the
+uncompressed payload layout:
 
 ```
 [4 bytes : LE u32]    header byte length (includes padding)
@@ -109,7 +123,7 @@ Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
 uv run python -m http.server 8000 & open http://localhost:8000
 ```
 
-A plain file server is required because the page uses `fetch()` to load `data/waves.bin.gz`, which browsers block over `file://` URLs.
+A plain file server is required because the page uses `fetch()` to load `data/index.json` and the `data/waves_<run_id>.bin.gz` files, which browsers block over `file://` URLs.
 
 ## Hosting on GitHub Pages
 
