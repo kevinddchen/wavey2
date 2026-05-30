@@ -305,8 +305,9 @@ function makeChart(id, times, yLabel, yMin, yMax, tickCb, yTickOptions = {}) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    mode: "index",
+                    mode: "nearest",
                     intersect: false,
+                    position: "nearest",
                     callbacks: {
                         title: (items) => (items.length ? items[0].label : ""),
                         label: (ctx) => (ctx.parsed.y != null ? `${ctx.parsed.y.toFixed(2)} ${yLabel}` : "N/A"),
