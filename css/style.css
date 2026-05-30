@@ -202,15 +202,22 @@ body.resizing {
 
 /* ── GitHub link ── */
 
-#github-link {
+#github-link,
+#noaa-link {
     display: block;
     text-align: center;
     font-size: 11px;
     color: #527090;
-    padding: 8px 0 4px;
     text-decoration: none;
 }
-#github-link:hover {
+#noaa-link {
+    padding: 8px 0 0;
+}
+#github-link {
+    padding: 0 0 4px;
+}
+#github-link:hover,
+#noaa-link:hover {
     color: #8aaccc;
 }
 
@@ -332,6 +339,7 @@ body.hide-sidebar #map-panel {
 body.hide-header #info-panel,
 body.hide-selectors #dive-sites,
 body.hide-time-control #time-control,
-body.hide-footer #github-link {
+body.hide-footer #github-link,
+body.hide-footer #noaa-link {
     display: none;
 }
