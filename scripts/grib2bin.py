@@ -64,12 +64,12 @@ import gzip
 import json
 import re
 import struct
-import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
+import pygrib
 
 # ── Variable shortNames ───────────────────────────────────────────────────────
 
@@ -115,16 +115,8 @@ Msg = dict[str, Any]
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def open_file(path: Path) -> Any:
-    try:
-        import pygrib
-    except ImportError:
-        sys.exit("ERROR: Run: pip install pygrib")
-    return pygrib.open(str(path))
-
-
 def list_variables(path: Path) -> None:
-    grbs = open_file(path)
+    grbs = pygrib.open(path)
     seen: dict[tuple[Any, ...], dict[str, Any]] = {}
     for grb in grbs:
         key = (grb.shortName, grb.name, grb.typeOfLevel, grb.level)
@@ -156,7 +148,7 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
         LEVEL_NAME.lower(): [],
     }
 
-    grbs = open_file(path)
+    grbs = pygrib.open(path)
     for grb in grbs:
         sn = grb.shortName.lower()
         if sn not in targets:
@@ -294,7 +286,7 @@ def default_out_path(input_path: Path) -> Path:
     """Derive `data/waves_<run_id>.bin.gz` from an `mtr_nwps_CG3_<run_id>.grib2` name."""
     m = re.search(r"(\d{8}_\d{4})", input_path.name)
     if not m:
-        sys.exit(f"ERROR: could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; pass --out explicitly")
+        raise ValueError(f"could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; pass --out explicitly")
     return Path("data") / f"waves_{m.group(1)}.bin.gz"
 
 
@@ -316,7 +308,7 @@ def main() -> None:
 
     path = Path(args.input)
     if not path.exists():
-        sys.exit(f"ERROR: File not found: {path}")
+        raise FileNotFoundError(f"File not found: {path}")
 
     if args.list:
         list_variables(path)
@@ -326,8 +318,7 @@ def main() -> None:
     msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
-        print(f"ERROR: Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
-        sys.exit(1)
+        raise ValueError(f"Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
 
     def report(label: str, msgs: list[Msg] | None) -> None:
         if msgs:
