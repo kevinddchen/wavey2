@@ -162,6 +162,27 @@ async function loadData(forecastId) {
     }
 }
 
+// Warm the browser HTTP cache by downloading the other runs' binaries in the
+// background, so a later `setForecast` hits cache instead of the network.
+// Best-effort: runs when idle, sequential to avoid competing with the user's
+// requests, silent on failure, and only drains the raw bytes (no decode).
+// `currentId` is skipped since it's already loaded.
+function prefetchRuns(forecasts, currentId) {
+    const start = async () => {
+        for (const f of forecasts) {
+            if (f.id === currentId) continue;
+            try {
+                const r = await fetch("data/" + f.file);
+                await r.arrayBuffer(); // drain into the cache
+            } catch {
+                // best-effort; a failed prefetch just means a slower switch later
+            }
+        }
+    };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(start);
+    else setTimeout(start, 0);
+}
+
 // Binary format: [u32 LE header_len][JSON header][typed LE arrays...]
 // See scripts/grib2bin.py for the writer.
 const DTYPE_VIEW = {
@@ -917,6 +938,9 @@ async function init() {
     });
 
     syncUrl(); // populate URL with current (defaults or URL-provided) values
+
+    // Background-download the other runs so switching forecasts hits cache.
+    prefetchRuns(forecasts, selectedId);
 }
 
 document.addEventListener("DOMContentLoaded", init);
