@@ -231,7 +231,6 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
         LOG.info(f"'{file_path}' already exists. Skipping download")
         return file_path
 
-    LOG.info(f"Downloading '{url}' to '{file_path}'")
     r = requests.get(url, stream=True)
     r.raise_for_status()
 
@@ -240,6 +239,8 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
         for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
             file.write(chunk)
 
+    size_mb = file_path.stat().st_size / 1e6
+    LOG.info(f"Downloaded '{url}' to '{file_path}' ({size_mb:.1f} MB)")
     return file_path
 
 
