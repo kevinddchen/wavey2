@@ -188,7 +188,7 @@ function decodeBinary(buf) {
     for (const v of variables) {
         const info = DTYPE_VIEW[v.dtype];
         if (!info) throw new Error("unsupported dtype: " + v.dtype);
-        const transform = v.transform || "linear";
+        const transform = v.transform;
         if (!INVERSE_TRANSFORM[transform]) throw new Error("unsupported transform: " + transform);
         const count = ncells * nt;
         const raw = new info.ctor(buf, byteOffset, count);
@@ -199,17 +199,19 @@ function decodeBinary(buf) {
         // series is a zero-copy subarray view over this buffer.
         const { scale, sentinel } = v;
         const flat = new Float32Array(count);
-        if (transform === "sqrt") {
+        if (transform === "linear") {
+            for (let i = 0; i < count; i++) {
+                const x = raw[i];
+                flat[i] = x === sentinel ? NaN : x / scale;
+            }
+        } else if (transform === "sqrt") {
             for (let i = 0; i < count; i++) {
                 const x = raw[i];
                 const y = x / scale;
                 flat[i] = x === sentinel ? NaN : y * y;
             }
         } else {
-            for (let i = 0; i < count; i++) {
-                const x = raw[i];
-                flat[i] = x === sentinel ? NaN : x / scale;
-            }
+            throw new Error("unexpected transform: " + transform);
         }
         const series = new Array(ncells);
         for (let c = 0; c < ncells; c++) {
