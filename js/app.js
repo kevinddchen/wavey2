@@ -579,6 +579,7 @@ function readUrlState() {
         hideSelectors: bool("hideSelectors"),
         hideTimeControl: bool("hideTimeControl"),
         hideFooter: bool("hideFooter"),
+        disablePrefetch: bool("disablePrefetch"),
     };
 }
 
@@ -940,7 +941,8 @@ async function init() {
     syncUrl(); // populate URL with current (defaults or URL-provided) values
 
     // Background-download the other runs so switching forecasts hits cache.
-    prefetchRuns(forecasts, selectedId);
+    // Opt-out via `disablePrefetch` (e.g. to save bandwidth on metered connections).
+    if (!urlState.disablePrefetch) prefetchRuns(forecasts, selectedId);
 }
 
 document.addEventListener("DOMContentLoaded", init);

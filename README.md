@@ -17,6 +17,7 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
     - Wave period
     - Wave direction
     - Water level / tide
+- **Switch forecast runs:** a dropdown in the selector row lists the available forecast runs — pick an earlier run to view a previous forecast. Runs swap in place without reloading the page, and the other runs are prefetched in the background so switching is near-instant.
 - **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the blue (primary) series
 - **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
 - **Keyboard shortcuts:** `Space` toggles play/pause and `←` / `→` step the time slider one frame at a time.
@@ -44,6 +45,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `hideSelectors`   | Hide the forecast + dive-site selector row              |
 | `hideTimeControl` | Hide the time slider / play button / legend bar         |
 | `hideFooter`      | Hide the "View on GitHub" footer link                   |
+| `disablePrefetch` | Don't background-download other runs (saves bandwidth)  |
 
 ## Embedding on another site
 
