@@ -132,17 +132,33 @@ function nearestPoint(grid, lat, lon) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
-async function loadData() {
+// Fetch + gunzip + decode a single forecast binary at `path`.
+// Pre-gzipped so the wire transfer stays small even when the host doesn't
+// auto-compress application/octet-stream (e.g. GitHub Pages).
+async function fetchForecast(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(`fetch ${path}: ${r.status}`);
+    const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
+    const buf = await new Response(decompressed).arrayBuffer();
+    return decodeBinary(buf);
+}
+
+// Resolve which forecast run to show and decode it, reading the run manifest
+// (`data/index.json`). Falls back to empty data if the manifest is missing,
+// empty, or malformed, or if the chosen run's binary fails to load.
+// Returns { data, forecasts, selectedId }: `forecasts` is the manifest list
+// (empty when falling back) and `selectedId` is the chosen run's id (or null).
+async function loadData(forecastId) {
     try {
-        const r = await fetch("data/waves.bin.gz");
+        const r = await fetch("data/index.json");
         if (!r.ok) throw new Error();
-        // Pre-gzipped so the wire transfer stays small even when the host
-        // doesn't auto-compress application/octet-stream (e.g. GitHub Pages).
-        const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
-        const buf = await new Response(decompressed).arrayBuffer();
-        return decodeBinary(buf);
+        const forecasts = await r.json();
+        if (!Array.isArray(forecasts) || forecasts.length === 0) throw new Error();
+        const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
+        const data = await fetchForecast("data/" + sel.file);
+        return { data, forecasts, selectedId: sel.id };
     } catch {
-        return generateEmptyData();
+        return { data: generateEmptyData(), forecasts: [], selectedId: null };
     }
 }
 
@@ -435,7 +451,10 @@ function drawArrow(ctx, x, y, deg, len = 10) {
 
 // Appended to a custom Leaflet pane (z-index 450) so it sits below marker-pane
 // (600) but above the tile layer inside leaflet-map-pane's stacking context.
-function initArrowOverlay(map, grid, data) {
+// `getData` returns the currently displayed forecast (it can change when the
+// user switches runs); the overlay owns a map pane + move handlers, so it's
+// created once and always reads the live data rather than being recreated.
+function initArrowOverlay(map, grid, getData) {
     const arrowPane = map.createPane("arrowPane");
     arrowPane.style.zIndex = 450;
     arrowPane.style.pointerEvents = "none";
@@ -462,7 +481,7 @@ function initArrowOverlay(map, grid, data) {
         const step = 8; // draw an arrow every `step` grid points
         for (let gy = 0; gy < ny; gy += step) {
             for (let gx = 0; gx < nx; gx += step) {
-                const dir = data.wave_dir[gy * nx + gx]?.[i];
+                const dir = getData().wave_dir[gy * nx + gx]?.[i];
                 if (dir == null) continue;
                 const lat = lat_min + (gy / (ny - 1)) * (lat_max - lat_min);
                 const lon = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
@@ -513,20 +532,21 @@ function readUrlState() {
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
-        t: t != null ? Math.max(0, Math.round(t)) : null,
         zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
+        forecast: p.get("forecast"),
+        t: t != null ? Math.max(0, Math.round(t)) : null,
         units: p.get("units"),
         charts: list("charts", CHART_NAMES),
         hideMap: bool("hideMap"),
         hideSidebar: bool("hideSidebar"),
         hideHeader: bool("hideHeader"),
-        hideSiteSelector: bool("hideSiteSelector"),
+        hideSelectors: bool("hideSelectors"),
         hideTimeControl: bool("hideTimeControl"),
         hideFooter: bool("hideFooter"),
     };
 }
 
-function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
+function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom, forecast }) {
     const p = new URLSearchParams(window.location.search);
     const set = (k, v, digits) => {
         if (v == null || isNaN(v)) p.delete(k);
@@ -537,8 +557,12 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
     set("cmpLat", cmpLat, 4);
     set("cmpLon", cmpLon, 4);
     set("zoom", zoom);
-    // NOTE: URL params are sorted with lat/lon/cmpLat/cmpLon first, then the others alphahetically
-    const order = ["lat", "lon", "cmpLat", "cmpLon"];
+    // `forecast` is a string run id, not numeric — set it directly.
+    if (forecast == null) p.delete("forecast");
+    else p.set("forecast", forecast);
+
+    // NOTE: some URL params are sorted in a particular order, then the others follow alphahetically
+    const order = ["lat", "lon", "cmpLat", "cmpLon", "zoom", "forecast"];
     const rank = (k) => (order.indexOf(k) === -1 ? order.length : order.indexOf(k));
     const sorted = [...p].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
     const qs = new URLSearchParams(sorted).toString();
@@ -548,18 +572,25 @@ function writeUrlState({ lat, lon, cmpLat, cmpLon, zoom }) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-    const data = await loadData();
-    const { times, grid } = data.metadata;
-    const nt = times.length;
-
     const urlState = readUrlState();
     if (urlState.units != null) setUnits(urlState.units);
+
+    // `data`, `selectedId`, `times`, and `nt` are reassigned by `setForecast`
+    // when the user switches runs in place. `grid` is constant across CG3 runs.
+    const loaded = await loadData(urlState.forecast);
+    let data = loaded.data;
+    let selectedId = loaded.selectedId;
+    const forecasts = loaded.forecasts;
+    const { grid } = data.metadata;
+    let times = data.metadata.times;
+    let nt = times.length;
+
     initData(data);
 
     document.body.classList.toggle("hide-map", urlState.hideMap);
     document.body.classList.toggle("hide-sidebar", urlState.hideSidebar);
     document.body.classList.toggle("hide-header", urlState.hideHeader);
-    document.body.classList.toggle("hide-site-selector", urlState.hideSiteSelector);
+    document.body.classList.toggle("hide-selectors", urlState.hideSelectors);
     document.body.classList.toggle("hide-time-control", urlState.hideTimeControl);
     document.body.classList.toggle("hide-footer", urlState.hideFooter);
 
@@ -572,6 +603,23 @@ async function init() {
     const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;
     document.getElementById("status").textContent = `Forecast ${forecastAge} · ${data.metadata.source}`;
+
+    // Forecast selector — lists the available runs (newest first). Switching
+    // swaps the data in place via `setForecast` (no page reload). Hidden unless
+    // there's a choice to make (≥2 runs).
+    const forecastSelect = document.getElementById("forecast-select");
+    if (forecasts.length > 1) {
+        for (const f of forecasts) {
+            const opt = document.createElement("option");
+            opt.value = f.id;
+            opt.textContent = `${formatLocalTime(new Date(f.forecast_time), FULL_TIME_FIELDS)} PT`;
+            forecastSelect.appendChild(opt);
+        }
+        forecastSelect.value = selectedId;
+        forecastSelect.addEventListener("change", () => setForecast(forecastSelect.value));
+    } else {
+        forecastSelect.style.display = "none";
+    }
 
     // Map — centers on the initial marker location
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
@@ -589,13 +637,14 @@ async function init() {
         [grid.lat_max, grid.lon_max],
     ];
     const heatLayer = L.imageOverlay("", mapBounds, { opacity: 0.8, interactive: false }).addTo(map);
-    const drawArrows = initArrowOverlay(map, grid, data);
+    const drawArrows = initArrowOverlay(map, grid, () => data);
 
     // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
     map.createPane("primaryMarkerPane").style.zIndex = 700;
 
-    // Charts
-    const charts = initCharts(times);
+    // Charts (rebuilt by `setForecast` when the run changes, since the x-axis
+    // labels/ticks are bound to `times` at creation).
+    let charts = initCharts(times);
     drawLegend();
 
     // Time control
@@ -654,15 +703,21 @@ async function init() {
         const ratio = (Math.max(left, Math.min(right, x)) - left) / (right - left);
         applyTime(Math.round(ratio * (nt - 1)));
     }
-    Object.values(charts).forEach((chart) => {
-        const el = chart.canvas.parentNode;
+    // Bind to each canvas once and resolve the live chart at event time, so the
+    // listeners keep working after `setForecast` rebuilds the chart instances.
+    Object.values(charts).forEach(({ canvas }) => {
+        const el = canvas.parentNode;
         el.addEventListener("mousedown", (e) => {
+            const chart = Chart.getChart(canvas);
+            if (!chart) return;
             e.preventDefault();
             chartDragging = true;
             scrubChart(chart, e.clientX);
         });
         el.addEventListener("mousemove", (e) => {
-            if (chartDragging) scrubChart(chart, e.clientX);
+            if (!chartDragging) return;
+            const chart = Chart.getChart(canvas);
+            if (chart) scrubChart(chart, e.clientX);
         });
     });
     window.addEventListener("mouseup", () => {
@@ -720,7 +775,41 @@ async function init() {
             cmpLat: marker2 ? marker2.getLatLng().lat : null,
             cmpLon: marker2 ? marker2.getLatLng().lng : null,
             zoom: map.getZoom(),
+            forecast: selectedId,
         });
+    }
+
+    // Switch the displayed run in place: fetch + decode the new binary, swap the
+    // data / time axis, rebuild the charts, and redraw the map overlays. The grid
+    // is shared across CG3 runs, so markers, map bounds, and selected cells stay
+    // valid. The current time index is preserved (clamped to the new length).
+    async function setForecast(id) {
+        const info = forecasts.find((f) => f.id === id);
+        if (!info || id === selectedId) return;
+        let next;
+        try {
+            next = await fetchForecast("data/" + info.file);
+        } catch {
+            forecastSelect.value = selectedId; // revert the dropdown on failure
+            return;
+        }
+        initData(next);
+        data = next;
+        selectedId = id;
+        times = data.metadata.times;
+        nt = times.length;
+
+        const age = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
+        document.getElementById("status").textContent = `Forecast ${age} · ${data.metadata.source}`;
+
+        Object.values(charts).forEach((c) => c.destroy());
+        charts = initCharts(times);
+
+        slider.max = nt - 1;
+        const i = Math.min(tIdx, nt - 1);
+        updateCharts(charts, data, selectedIdx, selectedIdx2, i);
+        applyTime(i);
+        syncUrl();
     }
     map.on("zoomend", syncUrl);
 

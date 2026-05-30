@@ -263,6 +263,9 @@ body.resizing {
     font-family: inherit;
     cursor: pointer;
 }
+#dive-sites select.forecast {
+    border-left-color: #527090;
+}
 #dive-sites select.primary {
     border-left-color: #4285f4;
 }
@@ -273,6 +276,10 @@ body.resizing {
 #dive-sites select:focus {
     outline: none;
     border-color: #2585c4;
+}
+#dive-sites select.forecast:hover,
+#dive-sites select.forecast:focus {
+    border-left-color: #527090;
 }
 #dive-sites select.primary:hover,
 #dive-sites select.primary:focus {
@@ -323,7 +330,7 @@ body.hide-sidebar #map-panel {
     height: auto;
 }
 body.hide-header #info-panel,
-body.hide-site-selector #dive-sites,
+body.hide-selectors #dive-sites,
 body.hide-time-control #time-control,
 body.hide-footer #github-link {
     display: none;
