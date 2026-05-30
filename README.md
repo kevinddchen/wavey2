@@ -78,9 +78,9 @@ uv sync --no-dev
 
 ```bash
 # the single most recent run:
-uv run python scripts/download_latest_grib.py
+uv run scripts/download_grib.py
 # or every run still on the server (saved under --dir), for the run selector:
-uv run python scripts/download_latest_grib.py --all --dir gribs
+uv run scripts/download_grib.py --all --dir gribs
 ```
 
 ### Convert data to binary
