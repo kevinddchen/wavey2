@@ -35,6 +35,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `zoom`            | Initial map zoom level (integer, 0–18)                  |
 | `forecast`        | Id of the forecast run to show (e.g. `20260528_1200`)   |
 | `t`               | Initial time-slider index (integer)                     |
+| `play`            | Autostart the time animation on load                    |
 | `units`           | Display units — `ft` (default) or `m`                   |
 | `charts`          | Comma-separated whitelist from `height,period,dir,tide` |
 | `hideMap`         | Hide the map panel                                      |
