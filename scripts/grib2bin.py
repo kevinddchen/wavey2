@@ -129,7 +129,7 @@ def list_variables(path: Path) -> None:
         seen[key]["count"] += 1
     grbs.close()
 
-    print(f"\nFound {len(seen)} unique variable(s) in {path.name}:\n")
+    print(f"\nFound {len(seen)} unique variables in {path.name}:\n")
     for (short, name, ltype, level), info in seen.items():
         print(
             f"  shortName={short!r:15s}  steps={info['count']:3d}  "
@@ -282,31 +282,33 @@ def write_binary(
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
-def default_out_path(input_path: Path) -> Path:
-    """Derive `data/waves_<run_id>.bin.gz` from an `mtr_nwps_CG3_<run_id>.grib2` name."""
+def _out_filename(input_path: Path) -> str:
+    """Derive `waves_<run_id>.bin.gz` from an `mtr_nwps_CG3_<run_id>.grib2` name."""
     m = re.search(r"(\d{8}_\d{4})", input_path.name)
     if not m:
         raise ValueError(f"could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; pass --out explicitly")
-    return Path("data") / f"waves_{m.group(1)}.bin.gz"
+    return f"waves_{m.group(1)}.bin.gz"
 
 
 def main() -> None:
-    # fmt: off
     ap = argparse.ArgumentParser(
-        description="Convert NWPS GRIB2 → waves.bin for the dive conditions viewer.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    ap.add_argument("input", help="Input .grib2 file")
-    ap.add_argument("--list", action="store_true",
-                    help="List available variables and exit")
-    ap.add_argument("--out", default=None,
-                    help="Output path (default: data/waves_<run_id>.bin.gz, derived from the input filename)")
-    ap.add_argument("--step", type=int, default=1, metavar="N",
-                    help="Keep every Nth time step, e.g. --step 3 for 3-hourly (default: 1)")
-    args = ap.parse_args()
+    # fmt: off
+    ap.add_argument(
+        "input", type=Path, help="Input .grib2 file",
+    )
+    ap.add_argument(
+        "--list", "-l", action="store_true", help="List available variables and exit",
+    )
+    ap.add_argument(
+        "--out-dir", "-o", type=Path, default=Path("./data/"), help="Output directory to save .bin.gz file",
+    )
     # fmt: on
+    args = ap.parse_args()
 
-    path = Path(args.input)
+    path: Path = args.input
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
@@ -332,9 +334,6 @@ def main() -> None:
     report("water_level", msgs_l)
 
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
-    if args.step > 1:
-        arr_h = arr_h[:: args.step]
-        times_iso = times_iso[:: args.step]
     nt, ny, nx = arr_h.shape
 
     print(f"\n  Grid: {nx}×{ny},  {nt} time steps")
@@ -367,27 +366,25 @@ def main() -> None:
 
     if msgs_d:
         _, _, _, arr_d, _ = extract(msgs_d)
-        arr_d = arr_d[:: args.step]
         arrays.append(("wave_dir", quantize(arr_d, **QUANT["wave_dir"])))
     else:
         arrays.append(("wave_dir", empty("wave_dir")))
 
     if msgs_p:
         _, _, _, arr_p, _ = extract(msgs_p)
-        arr_p = arr_p[:: args.step]
         arrays.append(("wave_period", quantize(arr_p, **QUANT["wave_period"])))
     else:
         arrays.append(("wave_period", empty("wave_period")))
 
     if msgs_l:
         _, _, _, arr_l, _ = extract(msgs_l)
-        arr_l = arr_l[:: args.step]
         arrays.append(("water_level", quantize(arr_l, **QUANT["water_level"])))
     else:
         arrays.append(("water_level", empty("water_level")))
 
-    out_path = Path(args.out) if args.out else default_out_path(path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir: Path = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / _out_filename(path)
     write_binary(out_path, metadata, arrays)
 
     size_kb = out_path.stat().st_size / 1e3

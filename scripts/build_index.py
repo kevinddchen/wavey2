@@ -36,13 +36,22 @@ def read_header(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build data/index.json from waves_<id>.bin.gz files.")
-    ap.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory of waves_*.bin.gz files")
-    ap.add_argument("--out", type=Path, default=None, help="Output path (default: <data-dir>/index.json)")
+    ap = argparse.ArgumentParser(
+        description="Build data/index.json from waves_<id>.bin.gz files.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    # fmt: off
+    ap.add_argument(
+        "--dir", "-d", type=Path, default=Path("./data/"), help="Directory of waves_*.bin.gz files",
+    )
+    ap.add_argument(
+        "--out", type=Path, default=None, help="Output path. If none, defaults to <data-dir>/index.json",
+    )
+    # fmt: on
     args = ap.parse_args()
 
-    data_dir: Path = args.data_dir
-    out_path: Path = args.out if args.out else data_dir / "index.json"
+    data_dir: Path = args.dir
+    out_path: Path = args.out or data_dir / "index.json"
 
     entries: list[dict[str, Any]] = []
     for path in sorted(data_dir.glob("waves_*.bin.gz")):
@@ -64,14 +73,14 @@ def main() -> None:
         )
 
     if not entries:
-        sys.exit(f"ERROR: no waves_<id>.bin.gz files found in {data_dir}")
+        raise FileNotFoundError(f"no waves_<id>.bin.gz files found in {data_dir}")
 
     # Newest first (fall back to the run id if forecast_time is missing).
     entries.sort(key=lambda e: e.get("forecast_time") or e["id"], reverse=True)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(entries, separators=(",", ":")))
-    print(f"Wrote {out_path}  ({len(entries)} forecast(s))")
+    print(f"Wrote {out_path}  ({len(entries)} forecasts)")
 
 
 if __name__ == "__main__":

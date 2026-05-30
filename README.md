@@ -74,19 +74,19 @@ uv venv
 uv sync --no-dev
 ```
 
-### Download GRIB2 file(s)
+### Download GRIB2 files
 
 ```bash
 # the single most recent run:
-uv run scripts/download_grib.py
-# or every run still on the server (saved under --dir), for the run selector:
-uv run scripts/download_grib.py --all --dir gribs
+uv run scripts/download_grib.py --out-dir gribs/
+# or every run still on the server:
+uv run scripts/download_grib.py --all --out-dir gribs/
 ```
 
 ### Convert data to binary
 
 ```bash
-uv run python scripts/grib2bin.py YOUR_FILE.grib2
+uv run scripts/grib2bin.py YOUR_FILE.grib2 --out-dir data/
 ```
 
 This creates one file per run named `data/waves_<run_id>.bin.gz` (the `<run_id>`,
@@ -94,7 +94,7 @@ e.g. `20260528_1200`, is parsed from the input filename). After converting all t
 runs you want available, build the manifest the website reads:
 
 ```bash
-uv run python scripts/build_index.py   # writes data/index.json
+uv run scripts/build_index.py --dir data/  # writes data/index.json
 ```
 
 `data/index.json` is a newest-first list of `{ id, file, forecast_time, source }`;

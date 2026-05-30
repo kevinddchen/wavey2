@@ -2,8 +2,8 @@ import argparse
 import logging
 import os
 import re
-from collections.abc import Iterator
 from pathlib import Path
+from typing import Iterator
 
 import requests
 from bs4 import BeautifulSoup
@@ -246,21 +246,19 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser(description="Download Monterey Bay NWPS GRIB2 forecast(s).")
-    parser.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        help="Download every available forecast run, printing one path per line",
+    ap = argparse.ArgumentParser(
+        description="Download Monterey Bay NWPS GRIB2 forecasts.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        "--dir",
-        "-d",
-        type=Path,
-        default=None,
-        help="Directory to save the file (default: cwd)",
+    # fmt: off
+    ap.add_argument(
+        "--all", "-a", action="store_true", help="Download every available forecast",
     )
-    args = parser.parse_args()
+    ap.add_argument(
+        "--out-dir", "-o", type=Path, default=Path("./gribs/"), help="Output directory to save the .grib2 files",
+    )
+    # fmt: on
+    args = ap.parse_args()
 
     if args.all:
         urls = get_all_available_forecasts()
@@ -270,7 +268,7 @@ def main() -> None:
 
     for url in urls:
         try:
-            download_forecast(url, dir=args.dir)
+            download_forecast(url, dir=args.out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
             continue
