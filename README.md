@@ -20,6 +20,7 @@ This is a rewrite of an [older version](https://github.com/kevinddchen/wavey) of
 - **Switch forecast runs:** a dropdown in the selector row lists the available forecast runs — pick an earlier run to view a previous forecast. Runs swap in place without reloading the page, and the other runs are prefetched in the background so switching is near-instant.
 - **Compare two dive sites:** right-click any ocean point to drop a gold comparison marker; its data is overlaid on every chart alongside the blue (primary) series
 - **Dive-site shortcuts:** two dropdowns at the bottom of the sidebar list common Monterey Bay dive sites — pick one in the blue (primary) dropdown or the gold (comparison) dropdown to jump the corresponding marker there.
+- **Buoy measurements:** the same dropdowns also list nearby NDBC buoys (e.g. "Buoy 46236 Measurements") — pick one to overlay the buoy's _actual_ observed wave height, period, and direction (last 5 days) on the charts. Because the forecast-run dropdown reaches back ~5 days, selecting an older run lets you compare that forecast against what the buoy actually measured.
 - **Keyboard shortcuts:** `Space` toggles play/pause and `←` / `→` step the time slider one frame at a time.
 - **Drag-to-scrub charts:** click and drag anywhere on a chart to scrub the time slider to that point.
 
@@ -81,15 +82,15 @@ uv sync --no-dev
 
 ```bash
 # the single most recent run:
-uv run scripts/download_grib.py --out-dir gribs/
+uv run scripts/download_grib.py
 # or every run still on the server:
-uv run scripts/download_grib.py --all --out-dir gribs/
+uv run scripts/download_grib.py -a
 ```
 
 ### Convert data to binary
 
 ```bash
-uv run scripts/grib2bin.py YOUR_FILE.grib2 --out-dir data/
+uv run scripts/grib2bin.py gribs/YOUR_FILE.grib2
 ```
 
 This creates one file per run named `data/waves_<run_id>.bin.gz` (the `<run_id>`,
@@ -97,7 +98,7 @@ e.g. `20260528_1200`, is parsed from the input filename). After converting all t
 runs you want available, build the manifest the website reads:
 
 ```bash
-uv run scripts/build_index.py --dir data/  # writes data/index.json
+uv run scripts/build_index.py  # writes data/index.json
 ```
 
 `data/index.json` is a newest-first list of `{ id, file, forecast_time, source }`;
@@ -119,6 +120,33 @@ The JSON header contains the metadata (source, forecast_time, times, grid, units
 See `scripts/grib2bin.py` for the writer and `js/app.js` (`decodeBinary`) for the reader.
 
 Grid point index: `i = y * nx + x`, where `y = 0` is the southernmost row.
+
+### Download buoy observations
+
+In addition to the forecast, the page can overlay **real** measurements from an
+[NDBC buoy](https://www.ndbc.noaa.gov/) (e.g. buoy 46236 in Monterey Bay) so a
+forecast run can be compared against what the ocean actually did:
+
+```bash
+uv run scripts/download_buoy.py -b 46236  # writes data/buoy_46236.json
+```
+
+This fetches the buoy's [realtime2](https://www.ndbc.noaa.gov/data/realtime2/) text
+table, keeps the last 5 days of wave observations (thinned to one per hour, since the
+charts only resolve hourly), and writes:
+
+```json
+{ "name": "Buoy 46236 Measurements",
+  "units": { "wave_height": "m", "wave_period": "s", "wave_dir": "deg" },
+  "times": ["...Z", ...], "wave_height": [1.4, ...], "wave_period": [13, ...], "wave_dir": [286, ...] }
+```
+
+Values are stored raw — `wave_height` in meters and `wave_dir` as the observed
+"direction-from" — so the page applies the same unit scaling and +180° "direction-toward"
+convention it uses for the forecast (see `initBuoy` in `js/app.js`). Missing readings
+(`MM` in the source) become `null`. The buoy has no tide reading, so the tide chart has
+no buoy series. Buoys are listed in `BUOYS` in both `scripts/download_buoy.py` and
+`js/app.js`.
 
 ## Local development
 
