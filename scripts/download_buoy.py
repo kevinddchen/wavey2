@@ -66,10 +66,7 @@ def _parse_value(token: str) -> float | None:
     """Parse an NDBC numeric token, mapping the `MM` sentinel (and junk) to None."""
     if token == _MISSING:
         return None
-    try:
-        return float(token)
-    except ValueError:
-        return None
+    return float(token)
 
 
 def parse_observations(text: str, since: datetime | None) -> dict[str, list[Any]]:
@@ -88,14 +85,12 @@ def parse_observations(text: str, since: datetime | None) -> dict[str, list[Any]
         line = line.strip()
         if not line or line.startswith("#"):
             continue  # header / comment lines
+
         fields = line.split()
-        if len(fields) <= max(_COLUMNS.values()):
-            continue
-        try:
-            year, month, day, hour, minute = (int(fields[i]) for i in range(5))
-            when = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
-        except ValueError, IndexError:
-            continue
+        assert len(fields) > max(_COLUMNS.values())
+
+        year, month, day, hour, minute = (int(fields[i]) for i in range(5))
+        when = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
         if since is not None and when < since:
             continue
 
@@ -111,7 +106,7 @@ def parse_observations(text: str, since: datetime | None) -> dict[str, list[Any]
 
     # Saved timestamps are the rounded hour (`slot`), not the raw observation time.
     items = sorted(by_hour.items())
-    columns: dict[str, list[Any]] = {"times": [slot.strftime("%Y-%m-%dT%H:%M:%SZ") for slot, _ in items]}
+    columns = {"times": [slot.strftime("%Y-%m-%dT%H:%M:%SZ") for slot, _ in items]}
     for name in _COLUMNS:
         columns[name] = [row[name] for _, (_, row) in items]
     return columns
@@ -189,7 +184,7 @@ def main() -> None:
     # fmt: on
     args = ap.parse_args()
 
-    download_buoy(args.buoy_id, args.out_dir, args.lookback_days)
+    download_buoy(buoy_id=args.buoy_id, out_dir=args.out_dir, lookback_days=args.lookback_days)
 
 
 if __name__ == "__main__":
