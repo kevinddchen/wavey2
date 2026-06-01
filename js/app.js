@@ -14,6 +14,17 @@ const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.9303 };
 
 const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONASTERY];
 
+// NDBC buoys with real measurements, overlaid on the charts via the selector
+// dropdowns. The data file is timestamped for cache-busting, so its name isn't
+// hardcoded here — it's resolved at runtime from `data/index.json` by id (a buoy
+// only appears in the selectors if the manifest lists a file for it). Unlike dive
+// sites, a buoy is a fixed observation point (not a forecast grid cell), so its
+// data is a time series aligned to the forecast time axis.
+const BUOYS = [
+    { id: "46236", name: "Buoy 46236 Measurements", lat: 36.759, lon: -121.95 },
+    { id: "46239", name: "Buoy 46239 Measurements", lat: 36.342, lon: -122.11 },
+];
+
 // Default primary marker (used when no `lat`/`lon` URL params are provided).
 // The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
 const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
@@ -143,40 +154,64 @@ async function fetchForecast(path) {
     return decodeBinary(buf);
 }
 
-// Resolve which forecast run to show and decode it, reading the run manifest
-// (`data/index.json`). Falls back to empty data if the manifest is missing,
-// empty, or malformed, or if the chosen run's binary fails to load.
-// Returns { data, forecasts, selectedId }: `forecasts` is the manifest list
-// (empty when falling back) and `selectedId` is the chosen run's id (or null).
+// Resolve which forecast run to show and decode it, reading the manifest
+// (`data/index.json`, a `{ forecasts, buoys }` object). Falls back to empty data
+// if the manifest is missing, empty, or malformed, or if the chosen run's binary
+// fails to load. Returns { data, forecasts, buoys, selectedId }: `forecasts` /
+// `buoys` are the manifest lists (empty when falling back) and `selectedId` is the
+// chosen run's id (or null). `buoys` is `[{ id, file }]` (see build_index.py).
 async function loadData(forecastId) {
     try {
         const r = await fetch("data/index.json");
         if (!r.ok) throw new Error();
-        const forecasts = await r.json();
+        const manifest = await r.json();
+        const forecasts = manifest.forecasts;
         if (!Array.isArray(forecasts) || forecasts.length === 0) throw new Error();
+        const buoys = Array.isArray(manifest.buoys) ? manifest.buoys : [];
         const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
         const data = await fetchForecast("data/" + sel.file);
-        return { data, forecasts, selectedId: sel.id };
+        return { data, forecasts, buoys, selectedId: sel.id };
     } catch {
-        return { data: generateEmptyData(), forecasts: [], selectedId: null };
+        return { data: generateEmptyData(), forecasts: [], buoys: [], selectedId: null };
     }
 }
 
-// Warm the browser HTTP cache by downloading the other runs' binaries in the
-// background, so a later `setForecast` hits cache instead of the network.
-// Best-effort: runs when idle, sequential to avoid competing with the user's
-// requests, silent on failure, and only drains the raw bytes (no decode).
-// `currentId` is skipped since it's already loaded.
-function prefetchRuns(forecasts, currentId) {
+// Fetch + decode one buoy's observation file, returning `{ ...entry, ...columnar
+// data }` (parallel `times` / `wave_height` / `wave_period` / `wave_dir` arrays;
+// see scripts/download_buoy.py) prepared by `initBuoy`. Like switching forecast
+// runs, this is lazy — the file is only fetched when the buoy is selected.
+// Throws if the file is missing or malformed.
+async function fetchBuoy(entry) {
+    const r = await fetch("data/" + entry.file);
+    if (!r.ok) throw new Error(`fetch ${entry.file}: ${r.status}`);
+    const json = await r.json();
+    if (!Array.isArray(json.times)) throw new Error(`bad buoy file: ${entry.file}`);
+    const buoy = { ...entry, ...json };
+    initBuoy(buoy);
+    return buoy;
+}
+
+// Warm the browser HTTP cache by downloading the other runs' binaries and the
+// buoy files in the background, so a later `setForecast` / buoy selection hits
+// cache instead of the network. Best-effort: runs when idle, sequential to avoid
+// competing with the user's requests, silent on failure, and only drains the raw
+// bytes (no decode). `currentId` (the already-loaded run) is skipped. `buoys` is
+// the manifest list `[{ id, file }]` (the files are timestamped, see build_index.py).
+function prefetchRuns(forecasts, currentId, buoys) {
+    const drain = async (path) => {
+        try {
+            const r = await fetch(path);
+            await r.arrayBuffer(); // drain into the cache
+        } catch {
+            // best-effort; a failed prefetch just means a slower switch later
+        }
+    };
     const start = async () => {
         for (const f of forecasts) {
-            if (f.id === currentId) continue;
-            try {
-                const r = await fetch("data/" + f.file);
-                await r.arrayBuffer(); // drain into the cache
-            } catch {
-                // best-effort; a failed prefetch just means a slower switch later
-            }
+            if (f.id !== currentId) await drain("data/" + f.file);
+        }
+        for (const b of buoys) {
+            await drain("data/" + b.file);
         }
     };
     if (typeof requestIdleCallback === "function") requestIdleCallback(start);
@@ -275,6 +310,45 @@ function initData(data) {
         // need to add 180° because `wave_dir` points toward the wave origin
         for (let i = 0; i < series.length; i++) if (series[i] != null) series[i] = (series[i] + 180) % 360;
     }
+}
+
+// Prepare a loaded buoy in place: parse the timestamp column to epoch-ms and apply
+// the same conventions `initData` applies to the forecast — scale `wave_height`
+// to the display unit and rotate `wave_dir` +180° (the buoy reports the direction
+// waves come *from*; the charts show the direction waves travel *toward*). Missing
+// values stay null. `wave_period` needs no transform. The columns are parallel
+// arrays aligned to `times`, oldest-first (see scripts/download_buoy.py).
+function initBuoy(buoy) {
+    buoy.wave_height = buoy.wave_height.map((v) => (v == null ? null : v * UNIT_SCALE));
+    buoy.wave_dir = buoy.wave_dir.map((v) => (v == null ? null : (v + 180) % 360));
+    // Index each observation by its epoch-ms timestamp. Both the buoy and the
+    // forecast sit on the same hourly grid (see scripts/download_buoy.py), so
+    // `alignBuoy` can match forecast steps to observations by exact timestamp.
+    buoy.indexByTime = new Map(buoy.times.map((t, i) => [Date.parse(t), i]));
+}
+
+// Align a buoy's observations to the forecast time axis. Returns
+// `{ wave_height, wave_period, wave_dir }`, each an array aligned to `times` (so
+// it drops straight into a chart dataset like a grid cell's series). Each forecast
+// step takes the observation at the same timestamp, else null (a gap, drawn as a
+// break since the datasets use `spanGaps:false`). The buoy's past observations only
+// overlap the forecast steps near the run's analysis time, so older forecast runs
+// fill more of the axis than newer ones.
+function alignBuoy(buoy, times) {
+    const out = {
+        wave_height: new Array(times.length).fill(null),
+        wave_period: new Array(times.length).fill(null),
+        wave_dir: new Array(times.length).fill(null),
+    };
+    for (let t = 0; t < times.length; t++) {
+        const j = buoy.indexByTime.get(Date.parse(times[t]));
+        if (j !== undefined) {
+            out.wave_height[t] = buoy.wave_height[j];
+            out.wave_period[t] = buoy.wave_period[j];
+            out.wave_dir[t] = buoy.wave_dir[j];
+        }
+    }
+    return out;
 }
 
 // ── Charts ───────────────────────────────────────────────────────────────────
@@ -413,11 +487,19 @@ function initCharts(times) {
     return charts;
 }
 
-function updateCharts(charts, data, gridIdx, gridIdx2, tIdx) {
+// Refresh both series on every chart. Each `src` is a per-slot source descriptor:
+//   null            → empty (no marker for that slot)
+//   { idx }         → forecast grid cell `idx` (read live from `data`)
+//   { series, ... } → a buoy, pre-aligned to the time axis (see `alignBuoy`)
+function updateCharts(charts, data, src1, src2, tIdx) {
+    const seriesFor = (src, key) => {
+        if (!src) return [];
+        if (src.series) return src.series[key] || [];
+        return (data[key] || [])[src.idx] || [];
+    };
     const apply = (chart, key) => {
-        const series = data[key] || [];
-        chart.data.datasets[0].data = gridIdx != null ? series[gridIdx] || [] : [];
-        chart.data.datasets[1].data = gridIdx2 != null ? series[gridIdx2] || [] : [];
+        chart.data.datasets[0].data = seriesFor(src1, key);
+        chart.data.datasets[1].data = seriesFor(src2, key);
     };
     apply(charts.height, "wave_height");
     apply(charts.period, "wave_period");
@@ -765,10 +847,14 @@ async function init() {
     });
 
     // Map click → primary marker (blue). Right-click → comparison marker (gold).
+    // Each slot's source (`src1`/`src2`) is a descriptor consumed by `updateCharts`:
+    // null, a grid cell `{ idx }`, or a buoy `{ buoy, series }` (`series` is the
+    // buoy resampled onto the current `times`; recomputed on run switch).
     let marker = null;
     let marker2 = null;
-    let selectedIdx = null;
-    let selectedIdx2 = null;
+    let src1 = null;
+    let src2 = null;
+    const gridIdxOf = (src) => (src && src.idx != null ? src.idx : null);
 
     function makeMarker(lat, lon, color, pane = "markerPane") {
         return L.circleMarker([lat, lon], {
@@ -787,16 +873,34 @@ async function init() {
         else marker.setLatLng([pt.lat, pt.lon]);
         document.getElementById("selected-coords").textContent =
             `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
-        selectedIdx = pt.idx;
-        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
+        src1 = { idx: pt.idx };
+        updateCharts(charts, data, src1, src2, tIdx);
     }
 
     function selectPoint2(lat, lon) {
         const pt = nearestPoint(grid, lat, lon);
         if (!marker2) marker2 = makeMarker(pt.lat, pt.lon, SECONDARY_COLOR).addTo(map);
         else marker2.setLatLng([pt.lat, pt.lon]);
-        selectedIdx2 = pt.idx;
-        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
+        src2 = { idx: pt.idx };
+        updateCharts(charts, data, src1, src2, tIdx);
+    }
+
+    // Point a slot at a buoy: drop its marker at the buoy's exact location (not
+    // grid-snapped) and align its observations to the current time axis.
+    function selectBuoy(buoy, slot) {
+        const series = alignBuoy(buoy, times);
+        if (slot === 1) {
+            if (!marker) marker = makeMarker(buoy.lat, buoy.lon, PRIMARY_COLOR, "primaryMarkerPane").addTo(map);
+            else marker.setLatLng([buoy.lat, buoy.lon]);
+            document.getElementById("selected-coords").textContent = buoy.name;
+            src1 = { buoy, series };
+            map.panTo([buoy.lat, buoy.lon]);
+        } else {
+            if (!marker2) marker2 = makeMarker(buoy.lat, buoy.lon, SECONDARY_COLOR).addTo(map);
+            else marker2.setLatLng([buoy.lat, buoy.lon]);
+            src2 = { buoy, series };
+        }
+        updateCharts(charts, data, src1, src2, tIdx);
     }
 
     function clearComparison() {
@@ -804,8 +908,8 @@ async function init() {
             marker2.remove();
             marker2 = null;
         }
-        selectedIdx2 = null;
-        updateCharts(charts, data, selectedIdx, selectedIdx2, tIdx);
+        src2 = null;
+        updateCharts(charts, data, src1, src2, tIdx);
     }
 
     function syncUrl() {
@@ -845,15 +949,33 @@ async function init() {
         Object.values(charts).forEach((c) => c.destroy());
         charts = initCharts(times);
 
+        // Re-align any buoy slots to the new run's time axis (a different run
+        // overlaps the buoy's observation window differently).
+        if (src1?.buoy) src1 = { buoy: src1.buoy, series: alignBuoy(src1.buoy, times) };
+        if (src2?.buoy) src2 = { buoy: src2.buoy, series: alignBuoy(src2.buoy, times) };
+
         slider.max = nt - 1;
         const i = Math.min(tIdx, nt - 1);
-        updateCharts(charts, data, selectedIdx, selectedIdx2, i);
+        updateCharts(charts, data, src1, src2, i);
         applyTime(i);
         syncUrl();
     }
     map.on("zoomend", syncUrl);
 
-    // Dive site dropdowns — populate both selects with the same site options
+    // Resolve a buoy's current (timestamped) filename from the manifest, returning
+    // the `BUOYS` entry merged with its `file` — or undefined if the manifest lists
+    // no file for it (e.g. its fetch failed during the build).
+    const buoyFileById = new Map(loaded.buoys.map((b) => [b.id, b.file]));
+    function buoyEntryById(id) {
+        const entry = BUOYS.find((b) => b.id === id);
+        const file = buoyFileById.get(id);
+        return entry && file ? { ...entry, file } : undefined;
+    }
+
+    // Dive site dropdowns — populate both selects with the same site options, then
+    // the buoys the manifest has a file for (value `buoy:<id>`; site values are
+    // numeric so they never collide). Selecting a buoy lazily fetches its file and
+    // points that slot at the buoy's measurements.
     const diveSitesSelect = document.getElementById("dive-sites-select");
     const diveSitesSelect2 = document.getElementById("dive-sites-select-2");
     DIVE_SITES.forEach((site, i) => {
@@ -864,17 +986,56 @@ async function init() {
             sel.appendChild(opt);
         }
     });
-    diveSitesSelect.addEventListener("change", () => {
-        const site = DIVE_SITES[+diveSitesSelect.value];
+    for (const b of BUOYS) {
+        if (!buoyFileById.has(b.id)) continue; // no data file in the manifest
+        for (const sel of [diveSitesSelect, diveSitesSelect2]) {
+            const opt = document.createElement("option");
+            opt.value = "buoy:" + b.id;
+            opt.textContent = b.name;
+            sel.appendChild(opt);
+        }
+    }
+    diveSitesSelect.addEventListener("change", async () => {
+        const val = diveSitesSelect.value;
+        if (val.startsWith("buoy:")) {
+            const entry = buoyEntryById(val.slice(5));
+            if (!entry) return;
+            let buoy;
+            try {
+                buoy = await fetchBuoy(entry); // lazy fetch; browser HTTP-caches the file
+            } catch {
+                diveSitesSelect.value = matchingSiteValue(gridIdxOf(src1)); // revert on failure
+                return;
+            }
+            selectBuoy(buoy, 1);
+            syncUrl();
+            return;
+        }
+        const site = DIVE_SITES[+val];
         if (!site) return;
         selectPoint(site.lat, site.lon);
         map.panTo([site.lat, site.lon]);
         syncUrl();
     });
-    diveSitesSelect2.addEventListener("change", () => {
+    diveSitesSelect2.addEventListener("change", async () => {
         const val = diveSitesSelect2.value;
         if (val === "clear") {
             clearComparison();
+            syncUrl();
+            return;
+        }
+        if (val.startsWith("buoy:")) {
+            const entry = buoyEntryById(val.slice(5));
+            if (!entry) return;
+            let buoy;
+            try {
+                buoy = await fetchBuoy(entry); // lazy fetch; browser HTTP-caches the file
+            } catch {
+                diveSitesSelect2.value = matchingSiteValue(gridIdxOf(src2)); // revert on failure
+                return;
+            }
+            selectBuoy(buoy, 2);
+            // NOTE: do not pan map
             syncUrl();
             return;
         }
@@ -894,24 +1055,24 @@ async function init() {
     };
 
     selectPoint(initialMarkerLat, initialMarkerLon);
-    diveSitesSelect.value = matchingSiteValue(selectedIdx);
+    diveSitesSelect.value = matchingSiteValue(gridIdxOf(src1));
 
     // Comparison marker is only placed if both URL params are provided
     if (urlState.cmpLat != null && urlState.cmpLon != null) {
         selectPoint2(urlState.cmpLat, urlState.cmpLon);
     }
-    diveSitesSelect2.value = matchingSiteValue(selectedIdx2);
+    diveSitesSelect2.value = matchingSiteValue(gridIdxOf(src2));
 
     map.on("click", ({ latlng: { lat, lng: lon } }) => {
         selectPoint(lat, lon);
         syncUrl();
-        diveSitesSelect.value = matchingSiteValue(selectedIdx);
+        diveSitesSelect.value = matchingSiteValue(gridIdxOf(src1));
     });
     map.on("contextmenu", (e) => {
         L.DomEvent.preventDefault(e.originalEvent);
         selectPoint2(e.latlng.lat, e.latlng.lng);
         syncUrl();
-        diveSitesSelect2.value = matchingSiteValue(selectedIdx2);
+        diveSitesSelect2.value = matchingSiteValue(gridIdxOf(src2));
     });
 
     // Sidebar resizer (drag the divider to resize the sidebar)
@@ -940,9 +1101,10 @@ async function init() {
 
     syncUrl(); // populate URL with current (defaults or URL-provided) values
 
-    // Background-download the other runs so switching forecasts hits cache.
-    // Opt-out via `disablePrefetch` (e.g. to save bandwidth on metered connections).
-    if (!urlState.disablePrefetch) prefetchRuns(forecasts, selectedId);
+    // Background-download the other runs and the buoy files so switching forecasts
+    // or selecting a buoy hits cache. Opt-out via `disablePrefetch` (e.g. to save
+    // bandwidth on metered connections).
+    if (!urlState.disablePrefetch) prefetchRuns(forecasts, selectedId, loaded.buoys);
 }
 
 document.addEventListener("DOMContentLoaded", init);

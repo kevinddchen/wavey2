@@ -1,16 +1,21 @@
 """
-Build `data/index.json`, the manifest of available forecast runs.
+Build `data/index.json`, the manifest of available forecast runs and buoys.
 
 Scans a data directory for `waves_<run_id>.bin.gz` files (as written by
-`grib2bin.py`), reads each one's JSON header, and writes a newest-first list of:
+`grib2bin.py`) and `buoy_<id>_<stamp>.json` files (as written by
+`download_buoy.py`), and writes:
 
-    [{ "id":            "YYYYMMDD_HHMM",
-       "file":          "waves_YYYYMMDD_HHMM.bin.gz",
-       "forecast_time": "YYYY-MM-DDTHH:MM:SSZ",
-       "source":        "NOAA NWPS – ..." }, ...]
+    { "forecasts": [{ "id":            "YYYYMMDD_HHMM",
+                      "file":          "waves_YYYYMMDD_HHMM.bin.gz",
+                      "forecast_time": "YYYY-MM-DDTHH:MM:SSZ",
+                      "source":        "NOAA NWPS – ..." }, ...],
+      "buoys":     [{ "id":   "46236",
+                      "file": "buoy_46236_YYYYMMDD_HHMM.json" }, ...] }
 
-The website (`loadData` in `js/app.js`) fetches this to populate the forecast
-selector and to resolve which run to display.
+Forecasts are newest-first. Buoy filenames are timestamped (for cache-busting),
+so the website can't hardcode them — it reads the current filename here. Only the
+newest file per buoy id is listed. The website (`loadData` in `js/app.js`) fetches
+this to populate the forecast selector and to resolve which files to load.
 """
 
 import argparse
@@ -22,8 +27,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Filename pattern written by grib2bin.py: waves_<YYYYMMDD_HHMM>.bin.gz
-_FILE_RE = re.compile(r"^waves_(\d{8}_\d{4})\.bin\.gz$")
+# Filename patterns written by grib2bin.py / download_buoy.py.
+_WAVES_RE = re.compile(r"^waves_(\d{8}_\d{4})\.bin\.gz$")
+_BUOY_RE = re.compile(r"^buoy_(\w+)_(\d{8}_\d{4})\.json$")
 
 
 def read_header(path: Path) -> dict[str, Any]:
@@ -53,9 +59,9 @@ def main() -> None:
     data_dir: Path = args.dir
     out_path: Path = args.out or data_dir / "index.json"
 
-    entries: list[dict[str, Any]] = []
+    forecasts: list[dict[str, Any]] = []
     for path in sorted(data_dir.glob("waves_*.bin.gz")):
-        m = _FILE_RE.match(path.name)
+        m = _WAVES_RE.match(path.name)
         if not m:
             continue
         try:
@@ -63,7 +69,7 @@ def main() -> None:
         except Exception as e:
             print(f"WARNING: skipping {path.name}: {e}", file=sys.stderr)
             continue
-        entries.append(
+        forecasts.append(
             {
                 "id": m.group(1),
                 "file": path.name,
@@ -72,15 +78,24 @@ def main() -> None:
             }
         )
 
-    if not entries:
+    if not forecasts:
         raise FileNotFoundError(f"no waves_<id>.bin.gz files found in {data_dir}")
 
     # Newest first (fall back to the run id if forecast_time is missing).
-    entries.sort(key=lambda e: e.get("forecast_time") or e["id"], reverse=True)
+    forecasts.sort(key=lambda e: e.get("forecast_time") or e["id"], reverse=True)
 
+    # Keep only the newest file per buoy id (filenames sort by their timestamp).
+    buoy_files: dict[str, str] = {}
+    for path in sorted(data_dir.glob("buoy_*.json")):
+        m = _BUOY_RE.match(path.name)
+        if m:
+            buoy_files[m.group(1)] = path.name  # later (newer stamp) wins
+    buoys = [{"id": buoy_id, "file": file} for buoy_id, file in sorted(buoy_files.items())]
+
+    index = {"forecasts": forecasts, "buoys": buoys}
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(entries, separators=(",", ":")))
-    print(f"Wrote {out_path}  ({len(entries)} forecasts)")
+    out_path.write_text(json.dumps(index, separators=(",", ":")))
+    print(f"Wrote {out_path}  ({len(forecasts)} forecasts, {len(buoys)} buoys)")
 
 
 if __name__ == "__main__":

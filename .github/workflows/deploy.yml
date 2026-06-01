@@ -56,6 +56,8 @@ jobs:
           for f in gribs/*.grib2; do
             uv run scripts/grib2bin.py "$f" --out-dir data || echo "WARNING: failed to convert $f"
           done
+          uv run scripts/download_buoy.py --buoy-id 46236 --out-dir data || echo "WARNING: buoy 46236 fetch failed"
+          uv run scripts/download_buoy.py --buoy-id 46239 --out-dir data || echo "WARNING: buoy 46239 fetch failed"
           uv run scripts/build_index.py --dir data
           mkdir _site
           cp index.html favicon.svg _site/
