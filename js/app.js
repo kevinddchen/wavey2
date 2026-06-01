@@ -15,12 +15,14 @@ const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.9303 };
 const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONASTERY];
 
 // NDBC buoys with real measurements, overlaid on the charts via the selector
-// dropdowns. `file` is fetched from `data/` (written by scripts/download_buoy.py).
-// Unlike dive sites, a buoy is a fixed observation point (not a forecast grid
-// cell), so its data is a time series aligned to the forecast time axis.
+// dropdowns. The data file is timestamped for cache-busting, so its name isn't
+// hardcoded here — it's resolved at runtime from `data/index.json` by id (a buoy
+// only appears in the selectors if the manifest lists a file for it). Unlike dive
+// sites, a buoy is a fixed observation point (not a forecast grid cell), so its
+// data is a time series aligned to the forecast time axis.
 const BUOYS = [
-    { id: "46236", name: "Buoy 46236 Measurements", lat: 36.759, lon: -121.95, file: "buoy_46236.json" },
-    { id: "46239", name: "Buoy 46239 Measurements", lat: 36.342, lon: -122.11, file: "buoy_46239.json" },
+    { id: "46236", name: "Buoy 46236 Measurements", lat: 36.759, lon: -121.95 },
+    { id: "46239", name: "Buoy 46239 Measurements", lat: 36.342, lon: -122.11 },
 ];
 
 // Default primary marker (used when no `lat`/`lon` URL params are provided).
@@ -152,22 +154,25 @@ async function fetchForecast(path) {
     return decodeBinary(buf);
 }
 
-// Resolve which forecast run to show and decode it, reading the run manifest
-// (`data/index.json`). Falls back to empty data if the manifest is missing,
-// empty, or malformed, or if the chosen run's binary fails to load.
-// Returns { data, forecasts, selectedId }: `forecasts` is the manifest list
-// (empty when falling back) and `selectedId` is the chosen run's id (or null).
+// Resolve which forecast run to show and decode it, reading the manifest
+// (`data/index.json`, a `{ forecasts, buoys }` object). Falls back to empty data
+// if the manifest is missing, empty, or malformed, or if the chosen run's binary
+// fails to load. Returns { data, forecasts, buoys, selectedId }: `forecasts` /
+// `buoys` are the manifest lists (empty when falling back) and `selectedId` is the
+// chosen run's id (or null). `buoys` is `[{ id, file }]` (see build_index.py).
 async function loadData(forecastId) {
     try {
         const r = await fetch("data/index.json");
         if (!r.ok) throw new Error();
-        const forecasts = await r.json();
+        const manifest = await r.json();
+        const forecasts = manifest.forecasts;
         if (!Array.isArray(forecasts) || forecasts.length === 0) throw new Error();
+        const buoys = Array.isArray(manifest.buoys) ? manifest.buoys : [];
         const sel = forecasts.find((f) => f.id === forecastId) || forecasts[0];
         const data = await fetchForecast("data/" + sel.file);
-        return { data, forecasts, selectedId: sel.id };
+        return { data, forecasts, buoys, selectedId: sel.id };
     } catch {
-        return { data: generateEmptyData(), forecasts: [], selectedId: null };
+        return { data: generateEmptyData(), forecasts: [], buoys: [], selectedId: null };
     }
 }
 
@@ -190,8 +195,9 @@ async function fetchBuoy(entry) {
 // buoy files in the background, so a later `setForecast` / buoy selection hits
 // cache instead of the network. Best-effort: runs when idle, sequential to avoid
 // competing with the user's requests, silent on failure, and only drains the raw
-// bytes (no decode). `currentId` (the already-loaded run) is skipped.
-function prefetchRuns(forecasts, currentId) {
+// bytes (no decode). `currentId` (the already-loaded run) is skipped. `buoys` is
+// the manifest list `[{ id, file }]` (the files are timestamped, see build_index.py).
+function prefetchRuns(forecasts, currentId, buoys) {
     const drain = async (path) => {
         try {
             const r = await fetch(path);
@@ -204,7 +210,7 @@ function prefetchRuns(forecasts, currentId) {
         for (const f of forecasts) {
             if (f.id !== currentId) await drain("data/" + f.file);
         }
-        for (const b of BUOYS) {
+        for (const b of buoys) {
             await drain("data/" + b.file);
         }
     };
@@ -956,14 +962,20 @@ async function init() {
     }
     map.on("zoomend", syncUrl);
 
+    // Resolve a buoy's current (timestamped) filename from the manifest, returning
+    // the `BUOYS` entry merged with its `file` — or undefined if the manifest lists
+    // no file for it (e.g. its fetch failed during the build).
+    const buoyFileById = new Map(loaded.buoys.map((b) => [b.id, b.file]));
     function buoyEntryById(id) {
-        return BUOYS.find((b) => b.id === id);
+        const entry = BUOYS.find((b) => b.id === id);
+        const file = buoyFileById.get(id);
+        return entry && file ? { ...entry, file } : undefined;
     }
 
-    // Dive site dropdowns — populate both selects with the same site options,
-    // then the known buoys (value `buoy:<id>`; site values are numeric so they
-    // never collide). Selecting a buoy lazily fetches its file and points that slot
-    // at the buoy's measurements.
+    // Dive site dropdowns — populate both selects with the same site options, then
+    // the buoys the manifest has a file for (value `buoy:<id>`; site values are
+    // numeric so they never collide). Selecting a buoy lazily fetches its file and
+    // points that slot at the buoy's measurements.
     const diveSitesSelect = document.getElementById("dive-sites-select");
     const diveSitesSelect2 = document.getElementById("dive-sites-select-2");
     DIVE_SITES.forEach((site, i) => {
@@ -975,6 +987,7 @@ async function init() {
         }
     });
     for (const b of BUOYS) {
+        if (!buoyFileById.has(b.id)) continue; // no data file in the manifest
         for (const sel of [diveSitesSelect, diveSitesSelect2]) {
             const opt = document.createElement("option");
             opt.value = "buoy:" + b.id;
@@ -1088,9 +1101,10 @@ async function init() {
 
     syncUrl(); // populate URL with current (defaults or URL-provided) values
 
-    // Background-download the other runs so switching forecasts hits cache.
-    // Opt-out via `disablePrefetch` (e.g. to save bandwidth on metered connections).
-    if (!urlState.disablePrefetch) prefetchRuns(forecasts, selectedId);
+    // Background-download the other runs and the buoy files so switching forecasts
+    // or selecting a buoy hits cache. Opt-out via `disablePrefetch` (e.g. to save
+    // bandwidth on metered connections).
+    if (!urlState.disablePrefetch) prefetchRuns(forecasts, selectedId, loaded.buoys);
 }
 
 document.addEventListener("DOMContentLoaded", init);

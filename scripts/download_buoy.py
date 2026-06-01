@@ -12,8 +12,12 @@ headers (column names, then units), and `MM` marks a missing value. Example:
 We keep the wave columns the website charts: WVHT (significant wave height, m),
 DPD (dominant wave period, s), and MWD (mean wave direction, degrees true, the
 direction the waves are coming *from*). Observations within the last 5 days are
-written to `data/buoy_<id>.json` as parallel arrays (one shared timestamp list
-plus one list per variable) so repeated JSON keys aren't stored per reading:
+written to `data/buoy_<id>_<YYYYMMDD_HHMM>.json` — the timestamp (the latest
+observation's hour) is part of the filename so a refreshed file gets a new URL
+and can't be served stale from a browser/CDN cache; `build_index.py` records the
+current filename in `data/index.json`. The payload is parallel arrays (one shared
+timestamp list plus one list per variable) so repeated JSON keys aren't stored
+per reading:
 
     {
       "name": "Buoy 46236 Measurements",
@@ -115,11 +119,14 @@ def parse_observations(text: str, since: datetime | None) -> dict[str, list[Any]
 
 def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None) -> Path:
     """
-    Download buoy `buoy_id` observations and write `data/buoy_<id>.json`.
+    Download buoy `buoy_id` observations and write `data/buoy_<id>_<stamp>.json`.
+
+    The filename's `<stamp>` (YYYYMMDD_HHMM) is the latest observation's hour, so a
+    refreshed file gets a distinct URL and won't be served stale from cache.
 
     Args:
         buoy_id: NDBC station id (must be a key in `BUOYS`).
-        out_dir: Directory to write `buoy_<id>.json` into.
+        out_dir: Directory to write the JSON file into.
         lookback_days: Keep observations from the last this many days.
 
     Returns:
@@ -146,8 +153,13 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
         **columns,
     }
 
+    # Stamp the filename with the latest observation hour (or now, if none) so the
+    # URL changes whenever the data does.
+    latest = columns["times"][-1] if columns["times"] else None
+    stamp = datetime.strptime(latest, "%Y-%m-%dT%H:%M:%SZ") if latest else datetime.now(timezone.utc)
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"buoy_{buoy_id}.json"
+    out_path = out_dir / f"buoy_{buoy_id}_{stamp.strftime('%Y%m%d_%H%M')}.json"
     out_path.write_text(json.dumps(payload, separators=(",", ":")))
     LOG.info(f"Wrote '{out_path}' ({n} observations)")
     return out_path

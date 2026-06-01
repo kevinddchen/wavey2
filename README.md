@@ -94,16 +94,14 @@ uv run scripts/grib2bin.py gribs/YOUR_FILE.grib2
 ```
 
 This creates one file per run named `data/waves_<run_id>.bin.gz` (the `<run_id>`,
-e.g. `20260528_1200`, is parsed from the input filename). After converting all the
-runs you want available, build the manifest the website reads:
+e.g. `20260528_1200`, is parsed from the input filename). Once you've generated all
+the wave files (and any buoy files, below), build the manifest the website reads
+with `scripts/build_index.py` (see [Build the manifest](#build-the-manifest)).
 
-```bash
-uv run scripts/build_index.py  # writes data/index.json
-```
-
-`data/index.json` is a newest-first list of `{ id, file, forecast_time, source }`;
-the page fetches it to populate the forecast selector and pick which run to show
-(overridable with the `forecast` URL param). Each `waves_<run_id>.bin.gz` has the
+`data/index.json` is a `{ forecasts, buoys }` object: `forecasts` is a newest-first
+list of `{ id, file, forecast_time, source }` (the page populates the run selector
+from it and picks which run to show, overridable with the `forecast` URL param) and
+`buoys` is a list of `{ id, file }` (see below). Each `waves_<run_id>.bin.gz` has the
 uncompressed payload layout:
 
 ```
@@ -128,7 +126,7 @@ In addition to the forecast, the page can overlay **real** measurements from an
 forecast run can be compared against what the ocean actually did:
 
 ```bash
-uv run scripts/download_buoy.py -b 46236  # writes data/buoy_46236.json
+uv run scripts/download_buoy.py -b 46236  # writes data/buoy_46236_<YYYYMMDD_HHMM>.json
 ```
 
 This fetches the buoy's [realtime2](https://www.ndbc.noaa.gov/data/realtime2/) text
@@ -141,12 +139,26 @@ charts only resolve hourly), and writes:
   "times": ["...Z", ...], "wave_height": [1.4, ...], "wave_period": [13, ...], "wave_dir": [286, ...] }
 ```
 
+The filename is stamped with the latest observation's hour
+(`buoy_46236_20260528_1200.json`) so a refreshed file gets a new URL and can't be
+served stale from a browser/CDN cache; the current filename is recorded in
+`index.json` (the page reads it from there rather than hardcoding it).
+
 Values are stored raw — `wave_height` in meters and `wave_dir` as the observed
 "direction-from" — so the page applies the same unit scaling and +180° "direction-toward"
 convention it uses for the forecast (see `initBuoy` in `js/app.js`). Missing readings
 (`MM` in the source) become `null`. The buoy has no tide reading, so the tide chart has
 no buoy series. Buoys are listed in `BUOYS` in both `scripts/download_buoy.py` and
 `js/app.js`.
+
+### Build the manifest
+
+After generating the wave files and any buoy files, build `data/index.json` (the
+manifest the website reads to discover both):
+
+```bash
+uv run scripts/build_index.py  # scans data/ for waves_*.bin.gz and buoy_*.json
+```
 
 ## Local development
 
