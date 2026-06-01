@@ -36,25 +36,25 @@ Use the URL parameters above to deep-link to a specific location. For example, t
 
 The current marker positions are encoded in the URL so you can bookmark or share a link to a specific view:
 
-| Parameter         | Description                                                  |
-| ----------------- | ------------------------------------------------------------ |
-| `lat`             | Latitude of the blue (primary) marker                        |
-| `lon`             | Longitude of the blue (primary) marker                       |
-| `cmpLat`          | Latitude of the gold (comparison) marker                     |
-| `cmpLon`          | Longitude of the gold (comparison) marker                    |
-| `zoom`            | Initial map zoom level (integer, 0–18)                       |
-| `forecast`        | Id of the forecast run to show (e.g. `20260528_1200`)        |
-| `t`               | Initial time-slider index (integer)                          |
-| `play`            | Autostart the time animation on load                         |
-| `units`           | Display units — `ft` (default) or `m`                        |
-| `charts`          | Comma-separated whitelist from `height,period,dir,tide`      |
-| `hideMap`         | Hide the map panel                                           |
-| `hideSidebar`     | Hide the sidebar                                             |
-| `hideHeader`      | Hide the sidebar header / title block                        |
-| `hideSelectors`   | Hide the forecast + dive-site selector row                   |
-| `hideTimeControl` | Hide the time slider / play button / legend bar              |
-| `hideFooter`      | Hide the "View on GitHub" footer link                        |
-| `disablePrefetch` | Don't background-download other forecasts (saves bandwidth)  |
+| Parameter         | Description                                                 |
+| ----------------- | ----------------------------------------------------------- |
+| `lat`             | Latitude of the blue (primary) marker                       |
+| `lon`             | Longitude of the blue (primary) marker                      |
+| `cmpLat`          | Latitude of the gold (comparison) marker                    |
+| `cmpLon`          | Longitude of the gold (comparison) marker                   |
+| `zoom`            | Initial map zoom level (integer, 0–18)                      |
+| `forecast`        | Id of the forecast run to show (e.g. `20260528_1200`)       |
+| `t`               | Initial time-slider index (integer)                         |
+| `play`            | Autostart the time animation on load                        |
+| `units`           | Display units — `ft` (default) or `m`                       |
+| `charts`          | Comma-separated whitelist from `height,period,dir,tide`     |
+| `hideMap`         | Hide the map panel                                          |
+| `hideSidebar`     | Hide the sidebar                                            |
+| `hideHeader`      | Hide the sidebar header / title block                       |
+| `hideSelectors`   | Hide the forecast + dive-site selector row                  |
+| `hideTimeControl` | Hide the time slider / play button / legend bar             |
+| `hideFooter`      | Hide the "View on GitHub" footer link                       |
+| `disablePrefetch` | Don't background-download other forecasts (saves bandwidth) |
 
 ## Data sources
 
