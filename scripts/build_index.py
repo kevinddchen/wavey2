@@ -81,6 +81,7 @@ def main() -> None:
     if not forecasts:
         raise FileNotFoundError(f"no waves_<id>.bin.gz files found in {data_dir}")
 
+    # Newest first
     forecasts.sort(key=lambda e: e["forecast_time"], reverse=True)
 
     # Keep only the newest file per buoy id (filenames sort by their timestamp).
