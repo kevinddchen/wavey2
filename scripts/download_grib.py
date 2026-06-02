@@ -8,7 +8,7 @@ from typing import Iterator
 import requests
 from bs4 import BeautifulSoup
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger(Path(__file__).stem)
 
 _BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod"
 _MTR = "mtr"
@@ -248,7 +248,11 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     ap = argparse.ArgumentParser(
         description="Download Monterey Bay NWPS GRIB2 forecasts.",

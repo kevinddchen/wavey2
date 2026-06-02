@@ -44,7 +44,7 @@ from typing import Any
 
 import requests
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger(Path(__file__).stem)
 
 # Known buoys
 BUOYS = ("46236", "46239")
@@ -157,12 +157,16 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"buoy_{buoy_id}_{stamp.strftime('%Y%m%d_%H%M')}.json"
     out_path.write_text(json.dumps(payload, separators=(",", ":")))
-    LOG.info(f"Wrote '{out_path}' ({n} observations)")
+    LOG.info(f"Wrote '{out_path}'")
     return out_path
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     ap = argparse.ArgumentParser(
         description="Download NDBC buoy observations as JSON for the dive conditions viewer.",

@@ -62,6 +62,7 @@ Quick start
 import argparse
 import gzip
 import json
+import logging
 import re
 import struct
 from pathlib import Path
@@ -70,6 +71,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pygrib
+
+LOG = logging.getLogger(Path(__file__).stem)
 
 # ── Variable shortNames ───────────────────────────────────────────────────────
 
@@ -128,15 +131,6 @@ def list_variables(path: Path) -> None:
             seen[key] = {"count": 0, "shape": shape}
         seen[key]["count"] += 1
     grbs.close()
-
-    print(f"\nFound {len(seen)} unique variables in {path.name}:\n")
-    for (short, name, ltype, level), info in seen.items():
-        print(
-            f"  shortName={short!r:15s}  steps={info['count']:3d}  "
-            f"shape={info['shape']}  typeOfLevel={ltype}  level={level}"
-        )
-        print(f"    name={name!r}")
-    print()
 
 
 def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
@@ -291,6 +285,12 @@ def _out_filename(input_path: Path) -> str:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
     ap = argparse.ArgumentParser(
         description="Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -316,29 +316,13 @@ def main() -> None:
         list_variables(path)
         return
 
-    print("Reading GRIB2 messages...")
     msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
         raise ValueError(f"Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
 
-    def report(label: str, msgs: list[Msg] | None) -> None:
-        if msgs:
-            print(f"  {label:11s}  → {msgs[0]['shortName']} ({len(msgs)} steps)")
-        else:
-            print(f"  {label:11s}  → NOT FOUND (will be null)")
-
-    report("wave_height", msgs_h)
-    report("wave_dir", msgs_d)
-    report("wave_period", msgs_p)
-    report("water_level", msgs_l)
-
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     nt, ny, nx = arr_h.shape
-
-    print(f"\n  Grid: {nx}×{ny},  {nt} time steps")
-    print(f"  Lat:  {lats[0]:.4f} → {lats[-1]:.4f}")
-    print(f"  Lon:  {lons[0]:.4f} → {lons[-1]:.4f}")
 
     grid = {
         "nx": int(nx),
@@ -388,7 +372,7 @@ def main() -> None:
     write_binary(out_path, metadata, arrays)
 
     size_kb = out_path.stat().st_size / 1e3
-    print(f"\nWrote {out_path}  ({size_kb:.1f} kB)")
+    LOG.info(f"Wrote '{out_path}' ({size_kb:.1f} kB)")
 
 
 if __name__ == "__main__":
