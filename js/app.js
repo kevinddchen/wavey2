@@ -1021,6 +1021,7 @@ async function init() {
         const val = diveSitesSelect2.value;
         if (val === "clear") {
             clearComparison();
+            diveSitesSelect2.value = ""; // reset to the "Comparison site…" placeholder
             syncUrl();
             return;
         }
