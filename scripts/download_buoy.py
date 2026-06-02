@@ -51,6 +51,9 @@ BUOYS = ("46236", "46239")
 
 _BASE_URL = "https://www.ndbc.noaa.gov/data/realtime2"
 
+# Seconds to wait for a connection / response before giving up.
+_TIMEOUT_SECS = 30
+
 # Column index (after the 5 date/time columns) → output field. NDBC realtime2
 # layout is fixed: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD ...
 _COLUMNS = {
@@ -134,7 +137,7 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
 
     url = f"{_BASE_URL}/{buoy_id}.txt"
 
-    r = requests.get(url)
+    r = requests.get(url, timeout=_TIMEOUT_SECS)
     r.raise_for_status()
 
     since = datetime.now(timezone.utc) - timedelta(days=lookback_days) if lookback_days is not None else None

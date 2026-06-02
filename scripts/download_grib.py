@@ -16,6 +16,9 @@ _CG3 = "CG3"
 
 _CHUNK_SIZE = 8192
 
+# Seconds to wait for a connection / between received chunks before giving up.
+_TIMEOUT_SECS = 30
+
 
 def _iter_forecast_urls() -> Iterator[str]:
     """
@@ -92,7 +95,7 @@ def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
         HTTPError: If accessing URL returns error.
     """
 
-    r = requests.get(url)
+    r = requests.get(url, timeout=_TIMEOUT_SECS)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -152,7 +155,7 @@ def _check_time(date: str, time: str) -> bool:
     """
 
     url = os.path.join(_BASE_URL, date, _MTR, time, _CG3)
-    r = requests.get(url)
+    r = requests.get(url, timeout=_TIMEOUT_SECS)
     return r.ok
 
 
@@ -231,7 +234,7 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
         LOG.info(f"'{file_path}' already exists. Skipping download")
         return file_path
 
-    r = requests.get(url, stream=True)
+    r = requests.get(url, stream=True, timeout=_TIMEOUT_SECS)
     r.raise_for_status()
 
     file_path.parent.mkdir(parents=True, exist_ok=True)
