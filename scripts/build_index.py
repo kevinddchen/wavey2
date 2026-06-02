@@ -81,8 +81,8 @@ def main() -> None:
     if not forecasts:
         raise FileNotFoundError(f"no waves_<id>.bin.gz files found in {data_dir}")
 
-    # Newest first (fall back to the run id if forecast_time is missing).
-    forecasts.sort(key=lambda e: e.get("forecast_time") or e["id"], reverse=True)
+    # Newest first
+    forecasts.sort(key=lambda e: e["forecast_time"], reverse=True)
 
     # Keep only the newest file per buoy id (filenames sort by their timestamp).
     buoy_files: dict[str, str] = {}
