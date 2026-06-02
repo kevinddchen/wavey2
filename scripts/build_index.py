@@ -21,11 +21,13 @@ this to populate the forecast selector and to resolve which files to load.
 import argparse
 import gzip
 import json
+import logging
 import re
 import struct
-import sys
 from pathlib import Path
 from typing import Any
+
+LOG = logging.getLogger(Path(__file__).stem)
 
 # Filename patterns written by grib2bin.py / download_buoy.py.
 _WAVES_RE = re.compile(r"^waves_(\d{8}_\d{4})\.bin\.gz$")
@@ -42,6 +44,12 @@ def read_header(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
     ap = argparse.ArgumentParser(
         description="Build data/index.json from waves_<id>.bin.gz files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -67,7 +75,7 @@ def main() -> None:
         try:
             metadata = read_header(path).get("metadata", {})
         except Exception as e:
-            print(f"WARNING: skipping {path.name}: {e}", file=sys.stderr)
+            LOG.warning(f"WARNING: skipping {path.name}: {e}")
             continue
         forecasts.append(
             {
@@ -95,7 +103,7 @@ def main() -> None:
     index = {"forecasts": forecasts, "buoys": buoys}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(index, separators=(",", ":")))
-    print(f"Wrote {out_path}  ({len(forecasts)} forecasts, {len(buoys)} buoys)")
+    LOG.info(f"Wrote '{out_path}' ({len(forecasts)} forecasts, {len(buoys)} buoys)")
 
 
 if __name__ == "__main__":

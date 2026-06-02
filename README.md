@@ -74,6 +74,18 @@ uv venv
 uv sync --no-dev
 ```
 
+### Fetch all data (one step)
+
+`fetch.sh` runs the whole pipeline below — download forecasts, convert them, download buoy
+observations, and build the manifest:
+
+```bash
+./fetch.sh
+```
+
+After fetching, skip ahead to [Run web server](#run-web-server). The individual steps below
+are documented for reference, or if you want to run them manually.
+
 ### Download GRIB2 files
 
 ```bash
