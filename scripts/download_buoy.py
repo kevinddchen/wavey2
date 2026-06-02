@@ -66,7 +66,7 @@ _MISSING = "MM"
 
 
 def _parse_value(token: str) -> float | None:
-    """Parse an NDBC numeric token, mapping the `MM` sentinel (and junk) to None."""
+    """Parse an NDBC numeric token, mapping the `MM` sentinel to None."""
     if token == _MISSING:
         return None
     return float(token)
@@ -80,7 +80,6 @@ def parse_observations(text: str, since: datetime | None) -> dict[str, list[Any]
     (the one nearest the top of the hour) since the website's charts only resolve
     hourly. Returns parallel, oldest-first arrays: `times` plus one list per
     variable in `_COLUMNS` (aligned to `times`, `None` for a missing reading).
-    Rows that can't be parsed (short lines, bad timestamps) are skipped.
     """
     # Keep, per clock hour, the (distance-to-the-hour, row) closest to HH:00.
     by_hour: dict[datetime, tuple[float, dict[str, Any]]] = {}
@@ -131,7 +130,6 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
         Path to the written JSON file.
 
     Raises:
-        KeyError: If `buoy_id` is not in `BUOYS`.
         HTTPError: If the NDBC request fails.
     """
 
