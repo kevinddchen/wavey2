@@ -995,56 +995,43 @@ async function init() {
             sel.appendChild(opt);
         }
     }
-    diveSitesSelect.addEventListener("change", async () => {
-        const val = diveSitesSelect.value;
-        if (val.startsWith("buoy:")) {
-            const entry = buoyEntryById(val.slice(5));
-            if (!entry) return;
-            let buoy;
-            try {
-                buoy = await fetchBuoy(entry); // lazy fetch; browser HTTP-caches the file
-            } catch {
-                diveSitesSelect.value = matchingSiteValue(gridIdxOf(src1)); // revert on failure
-                return;
+    // Wire up one slot's dropdown. Slots differ only in which source they own
+    // (`src1`/`src2`, read live for the revert-on-failure path), whether picking a
+    // site recenters the map (primary does, comparison doesn't), and that the
+    // comparison slot also offers a "clear" option.
+    function bindDiveSiteSelect(select, slot) {
+        select.addEventListener("change", async () => {
+            const val = select.value;
+            if (val === "clear") {
+                clearComparison();
+                select.value = ""; // reset to the "Comparison site" placeholder
+            } else if (val.startsWith("buoy:")) {
+                const entry = buoyEntryById(val.slice(5));
+                if (!entry) return;
+                let buoy;
+                try {
+                    buoy = await fetchBuoy(entry); // lazy fetch; browser HTTP-caches the file
+                } catch {
+                    const src = slot === 1 ? src1 : src2;
+                    select.value = matchingSiteValue(gridIdxOf(src)); // revert on failure
+                    return;
+                }
+                selectBuoy(buoy, slot);
+            } else {
+                const site = DIVE_SITES[+val];
+                if (!site) return;
+                if (slot === 1) {
+                    selectPoint(site.lat, site.lon);
+                    map.panTo([site.lat, site.lon]); // primary recenters; comparison doesn't
+                } else {
+                    selectPoint2(site.lat, site.lon);
+                }
             }
-            selectBuoy(buoy, 1);
             syncUrl();
-            return;
-        }
-        const site = DIVE_SITES[+val];
-        if (!site) return;
-        selectPoint(site.lat, site.lon);
-        map.panTo([site.lat, site.lon]);
-        syncUrl();
-    });
-    diveSitesSelect2.addEventListener("change", async () => {
-        const val = diveSitesSelect2.value;
-        if (val === "clear") {
-            clearComparison();
-            syncUrl();
-            return;
-        }
-        if (val.startsWith("buoy:")) {
-            const entry = buoyEntryById(val.slice(5));
-            if (!entry) return;
-            let buoy;
-            try {
-                buoy = await fetchBuoy(entry); // lazy fetch; browser HTTP-caches the file
-            } catch {
-                diveSitesSelect2.value = matchingSiteValue(gridIdxOf(src2)); // revert on failure
-                return;
-            }
-            selectBuoy(buoy, 2);
-            // NOTE: do not pan map
-            syncUrl();
-            return;
-        }
-        const site = DIVE_SITES[+val];
-        if (!site) return;
-        selectPoint2(site.lat, site.lon);
-        // NOTE: do not pan map
-        syncUrl();
-    });
+        });
+    }
+    bindDiveSiteSelect(diveSitesSelect, 1);
+    bindDiveSiteSelect(diveSitesSelect2, 2);
 
     // Map dive sites to their snapped grid indices so a click that lands on the
     // same cell as a known site can sync the dropdown.
