@@ -173,6 +173,12 @@ body.resizing {
     margin-bottom: 4px;
 }
 
+#status-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
 #status {
     font-size: 11px;
     color: #52718f;
