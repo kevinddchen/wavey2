@@ -173,6 +173,12 @@ body.resizing {
     margin-bottom: 4px;
 }
 
+#status-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
 #status {
     font-size: 11px;
     color: #52718f;
@@ -202,22 +208,25 @@ body.resizing {
 
 /* ── GitHub link ── */
 
-#github-link,
-#noaa-link {
-    display: block;
+.data-source {
     text-align: center;
     font-size: 11px;
     color: #527090;
     text-decoration: none;
 }
-#noaa-link {
-    padding: 8px 0 0;
+#data-sources {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 4px;
 }
-#github-link {
-    padding: 0 0 4px;
+.data-source-sep {
+    font-size: 11px;
+    color: #527090;
 }
-#github-link:hover,
-#noaa-link:hover {
+.data-source:hover {
     color: #8aaccc;
 }
 

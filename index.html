@@ -36,9 +36,11 @@
       <div id="sidebar">
         <div id="info-panel">
           <h1>Monterey Bay Dive Conditions</h1>
-          <p id="status"></p>
-          <div id="selected-info">
-            <span id="selected-coords"></span>
+          <div id="status-row">
+            <div id="selected-info">
+              <span id="selected-coords"></span>
+            </div>
+            <p id="status"></p>
           </div>
           <p id="instructions">
             <span class="dot primary">&#9679;</span> Left-click: primary &middot;
@@ -73,12 +75,25 @@
             <h3>Sea Surface Level (relative to MSL)</h3>
             <canvas id="chart-tide"></canvas>
           </div>
-          <a id="noaa-link" href="https://polar.ncep.noaa.gov/nwps/" target="_blank" rel="noopener">
-            Data from NOAA Nearshore Wave Prediction System (NWPS)
-          </a>
-          <a id="github-link" href="https://github.com/kevinddchen/wavey2" target="_blank" rel="noopener">
-            View on GitHub · <span id="version-label"></span>
-          </a>
+          <div id="data-sources">
+            <a class="data-source" href="https://polar.ncep.noaa.gov/nwps/" target="_blank" rel="noopener">
+              Forecast data from NWPS
+            </a>
+            <span class="data-source-sep">|</span>
+            <a class="data-source" href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener">
+              Buoy data from NDBC
+            </a>
+            <span class="data-source-sep">|</span>
+            <a
+              id="github-link"
+              class="data-source"
+              href="https://github.com/kevinddchen/wavey2"
+              target="_blank"
+              rel="noopener"
+            >
+              View on GitHub · <span id="version-label"></span>
+            </a>
+          </div>
         </div>
       </div>
     </div>

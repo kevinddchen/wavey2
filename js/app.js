@@ -721,7 +721,7 @@ async function init() {
 
     const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;
-    document.getElementById("status").textContent = `Forecast ${forecastAge} · ${data.metadata.source}`;
+    document.getElementById("status").textContent = `Forecast ${forecastAge}`;
 
     // Forecast selector — lists the available runs (newest first). Switching
     // swaps the data in place via `setForecast` (no page reload). Hidden unless
