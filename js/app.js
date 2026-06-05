@@ -599,7 +599,7 @@ function initArrowOverlay(map, grid, getData) {
         for (let gy = 0; gy < ny; gy += step) {
             for (let gx = 0; gx < nx; gx += step) {
                 const dir = getData().wave_dir[gy * nx + gx]?.[i];
-                if (dir == null) continue;
+                if (dir == null || isNaN(dir)) continue;
                 const lat = lat_min + (gy / (ny - 1)) * (lat_max - lat_min);
                 const lon = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
                 const pt = map.latLngToContainerPoint([lat, lon]);
