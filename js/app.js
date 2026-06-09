@@ -542,6 +542,12 @@ function formatAge(ms) {
     return `${Math.round(h / 24)}d ago`;
 }
 
+// Sets the status label to the forecast's age (e.g. "Forecast 3h ago").
+function setStatus(forecastTime) {
+    const age = formatAge(Date.now() - new Date(forecastTime).getTime());
+    document.getElementById("status").textContent = `Forecast ${age}`;
+}
+
 function fmtTime(isoStr, forecastTime) {
     const d = new Date(isoStr);
     const dh = Math.round((d - new Date(forecastTime)) / 3.6e6);
@@ -719,9 +725,8 @@ async function init() {
         }
     }
 
-    const forecastAge = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
     document.getElementById("version-label").textContent = `v${VERSION}`;
-    document.getElementById("status").textContent = `Forecast ${forecastAge}`;
+    setStatus(data.metadata.forecast_time);
 
     // Forecast selector — lists the available runs (newest first). Switching
     // swaps the data in place via `setForecast` (no page reload). Hidden unless
@@ -943,8 +948,7 @@ async function init() {
         times = data.metadata.times;
         nt = times.length;
 
-        const age = formatAge(Date.now() - new Date(data.metadata.forecast_time).getTime());
-        document.getElementById("status").textContent = `Forecast ${age} · ${data.metadata.source}`;
+        setStatus(data.metadata.forecast_time);
 
         Object.values(charts).forEach((c) => c.destroy());
         charts = initCharts(times);
