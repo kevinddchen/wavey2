@@ -162,7 +162,11 @@ async function fetchForecast(path) {
 // chosen run's id (or null). `buoys` is `[{ id, file }]` (see build_index.py).
 async function loadData(forecastId) {
     try {
-        const r = await fetch("data/index.json");
+        // `no-store` bypasses the HTTP cache so a single refresh always sees the
+        // latest manifest. index.json has a fixed URL (unlike the timestamped,
+        // content-addressed binaries it points to), so a cached copy would
+        // otherwise pin the app to a stale run until the cache expired.
+        const r = await fetch("data/index.json", { cache: "no-store" });
         if (!r.ok) throw new Error();
         const manifest = await r.json();
         const forecasts = manifest.forecasts;
