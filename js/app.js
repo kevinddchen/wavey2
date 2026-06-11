@@ -704,17 +704,11 @@ async function init() {
     const urlState = readUrlState();
     if (urlState.units != null) setUnits(urlState.units);
 
-    // `data`, `selectedId`, `times`, and `nt` are reassigned by `setForecast`
-    // when the user switches runs in place. `grid` is constant across CG3 runs.
-    const loaded = await loadData(urlState.forecast);
-    let data = loaded.data;
-    let selectedId = loaded.selectedId;
-    const forecasts = loaded.forecasts;
-    const { grid } = data.metadata;
-    let times = data.metadata.times;
-    let nt = times.length;
-
-    initData(data);
+    // Kick off the forecast download now (without awaiting) so it overlaps with
+    // the data-independent DOM + map setup below — in particular the map's OSM
+    // tiles, which start downloading the moment the map is created. Only the
+    // data-dependent overlays (heatmap, arrows, charts) wait on `dataPromise`.
+    const dataPromise = loadData(urlState.forecast);
 
     document.body.classList.toggle("hide-map", urlState.hideMap);
     document.body.classList.toggle("hide-sidebar", urlState.hideSidebar);
@@ -730,6 +724,35 @@ async function init() {
     }
 
     document.getElementById("version-label").textContent = `v${VERSION}`;
+
+    // Map — centers on the initial marker location (from URL params or the default
+    // site, never from forecast data), so it's built before the data is awaited and
+    // its tiles download in parallel with the forecast binary.
+    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
+    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
+    const map = L.map("map").setView(
+        [initialMarkerLat, initialMarkerLon],
+        urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
+    );
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: MAX_ZOOM,
+    }).addTo(map);
+    // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
+    map.createPane("primaryMarkerPane").style.zIndex = 700;
+
+    // Everything below needs the forecast data. `data`, `selectedId`, `times`, and
+    // `nt` are reassigned by `setForecast` when the user switches runs in place.
+    // `grid` is constant across CG3 runs.
+    const loaded = await dataPromise;
+    let data = loaded.data;
+    let selectedId = loaded.selectedId;
+    const forecasts = loaded.forecasts;
+    const { grid } = data.metadata;
+    let times = data.metadata.times;
+    let nt = times.length;
+
+    initData(data);
     setStatus(data.metadata.forecast_time);
 
     // Forecast selector — lists the available runs (newest first). Switching
@@ -749,26 +772,12 @@ async function init() {
         forecastSelect.style.display = "none";
     }
 
-    // Map — centers on the initial marker location
-    const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
-    const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
-    const map = L.map("map").setView(
-        [initialMarkerLat, initialMarkerLon],
-        urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
-    );
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: MAX_ZOOM,
-    }).addTo(map);
     const mapBounds = [
         [grid.lat_min, grid.lon_min],
         [grid.lat_max, grid.lon_max],
     ];
     const heatLayer = L.imageOverlay("", mapBounds, { opacity: 0.8, interactive: false }).addTo(map);
     const drawArrows = initArrowOverlay(map, grid, () => data);
-
-    // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
-    map.createPane("primaryMarkerPane").style.zIndex = 700;
 
     // Charts (rebuilt by `setForecast` when the run changes, since the x-axis
     // labels/ticks are bound to `times` at creation).
