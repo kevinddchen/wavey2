@@ -27,9 +27,8 @@ misplace; the clip is the edge the eye lines up against the map.
 
 Coastlines don't move, so this is a one-off: `js/coastline.js` is committed and
 `fetch.sh` does not run this. Re-run it only if the forecast grid's bounds change
--- the generated file records the bounds it was built for, and the website skips
-the clip (falling back to a half-opacity heatmap) if they don't match the loaded
-forecast.
+-- the generated file records the bounds it was built for, but nothing checks them
+at runtime, so a stale path would simply be clipped against the wrong rectangle.
 
 The output embeds OpenStreetMap data, (C) OpenStreetMap contributors, licensed
 under the ODbL; the website credits OSM in its map attribution.
@@ -142,8 +141,9 @@ def close_mainland(chain: list[Point]) -> list[Point]:
 
     The mainland coastline crosses the grid from north to south with the ocean to
     the west, so both ends leave the grid rectangle through its top and bottom
-    edges. Joining them east of every coastline point closes the polygon over
-    land, entirely outside the rectangle, where it can't cut into the water.
+    edges. Joining them east of every coastline point — and of the rectangle
+    itself, so the seam can never fall inside the mask — closes the polygon over
+    land, outside the rectangle, where it can't cut into the water.
     """
     north, south = chain[0], chain[-1]
     if not (north[1] > _LAT_MAX and south[1] < _LAT_MIN):
@@ -151,7 +151,7 @@ def close_mainland(chain: list[Point]) -> list[Point]:
             f"mainland chain does not span the grid: ends at {north} and {south}, "
             f"expected latitudes outside [{_LAT_MIN}, {_LAT_MAX}]"
         )
-    east = max(lon for lon, _ in chain) + _CLOSURE_PAD_DEG
+    east = max(*(lon for lon, _ in chain), _LON_MAX) + _CLOSURE_PAD_DEG
     return chain + [(east, south[1]), (east, north[1])]
 
 
