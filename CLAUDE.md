@@ -1,8 +1,91 @@
 # CLAUDE.md
 
-## Linting & formatting
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Lint: `npm run eslint` (auto-fix: `npm run eslint:fix`)
-- Format check: `npm run prettier` (auto-fix: `npm run prettier:fix`)
+## Overview
 
-Run these to check JS/HTML/CSS changes.
+A dependency-free static webpage (`index.html` + `css/style.css` + `js/app.js`) that visualizes NOAA
+NWPS wave forecasts for Monterey Bay dive planning. Python scripts in `scripts/` fetch and transcode
+the forecast data into a compact binary the page decodes in the browser. Deployed to GitHub Pages.
+
+## Commands
+
+Setup:
+
+```bash
+uv venv && uv sync   # Python (>=3.14); `uv sync --no-dev` if you only need to fetch data
+npm install          # JS lint/format tooling only — no runtime deps, no bundler
+```
+
+Checks (mirrors `.github/workflows/check.yml` — there is no test suite):
+
+```bash
+uv run ruff check . && uv run ruff format --check . && uv run mypy .
+npm run eslint && npm run prettier
+```
+
+Auto-fix: `uv run ruff format .`, `npm run eslint:fix`, `npm run prettier:fix`.
+
+Run locally — `data/` and `gribs/` are gitignored, so fetch data first (takes a few minutes; it
+downloads every forecast run still on the NOAA server):
+
+```bash
+./fetch.sh                                          # download + convert + build manifest
+uv run python -m http.server 8000                   # a real server is required; fetch() fails on file://
+```
+
+Individual pipeline steps (`download_grib.py`, `grib2bin.py`, `download_buoy.py`, `build_index.py`)
+are documented in README.md and in each script's module docstring.
+
+## Data pipeline
+
+```
+NOAA NWPS (nomads.ncep.noaa.gov)  --download_grib.py-->  gribs/mtr_nwps_CG3_<run_id>.grib2
+                                  --grib2bin.py------->  data/waves_<run_id>.bin.gz
+NDBC (ndbc.noaa.gov)              --download_buoy.py-->  data/buoy_<id>_<stamp>.json
+                                  --build_index.py---->  data/index.json
+```
+
+`data/index.json` is the manifest the page reads first; it lists forecast runs (newest first) and the
+current buoy filenames. Buoy files are timestamped so a refreshed file gets a new URL — the page must
+never hardcode a buoy filename, it resolves it from the manifest by id.
+
+## Things that must change together
+
+- **Binary format.** `write_binary` in `scripts/grib2bin.py` (writer, format documented in its module
+  docstring), `decodeBinary` in `js/app.js` (reader), and `read_header` in `scripts/build_index.py`
+  (header-only reader) all encode the same layout: `[u32 LE header_len][JSON header][typed LE arrays]`,
+  cell-major/time-minor, gzipped. Bump `header.version` when the layout changes. Per-variable
+  quantization (dtype, scale, sentinel, linear/sqrt transform) lives in `QUANT`/`DTYPE_INFO` and is
+  declared in the header, so the decoder stays generic — prefer changing the tables over the decoder.
+- **Units and direction conventions.** Data files stay in NOAA's native form: meters, and wave
+  direction as the direction waves come _from_. The page applies display scaling (`UNIT_SCALE`) and
+  the +180° "direction-toward" rotation in `initData` (forecast) and `initBuoy` (buoy) — keep those
+  two in sync when touching either.
+- **URL parameters.** `readUrlState` in `js/app.js` and the parameter table in README.md. These params
+  are the embedding API (the page is designed to be iframed), so treat them as a stable contract.
+- **`hide*` params.** Each toggles a `body.hide-*` class handled at the bottom of `css/style.css`.
+
+## Frontend notes
+
+- `js/app.js` is a single classic script (`sourceType: "script"`, no modules, no build step). Leaflet
+  and Chart.js load from CDN as globals; `VERSION` comes from `js/version.js` across `<script>` tags.
+  New cross-file globals need a `globals` entry in `eslint.config.mjs`.
+- Nearly all state lives inside `init()`. `data`, `times`, `nt`, and the chart instances are
+  reassigned by `setForecast` when the user switches runs, so anything holding a reference to them
+  must re-read (e.g. the arrow overlay takes a `getData()` thunk; chart listeners resolve the live
+  chart via `Chart.getChart`).
+- Chart slots use source descriptors: `null`, `{ idx }` (forecast grid cell, read live from `data`),
+  or `{ buoy, series }` (observations pre-aligned to the forecast time axis). Buoy slots must be
+  re-aligned on a run switch.
+- `data/index.json` is fetched with `cache: "no-store"` — it has a fixed URL, so a cached copy would
+  pin the app to a stale run. The binaries it points to are content-addressed and cache normally.
+
+## Releasing
+
+`js/version.js` is the source of truth for the version (`pyproject.toml`'s is a placeholder). The
+deploy workflow checks out the **latest git tag**, not `main`, so merged changes do not go live until
+a `vX.Y.Z` tag exists: bump `js/version.js` in a commit titled `vX.Y.Z`, then tag it. Deploys also run
+on a 4×/day cron to refresh forecast data.
+
+Commit titles follow `type: Title (#PR)` (`feat`, `fix`, `perf`, `refactor`, `chore`).
