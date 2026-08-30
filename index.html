@@ -10,9 +10,18 @@
     <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
     <script defer src="js/version.js"></script>
+    <script defer src="js/coastline.js"></script>
     <script defer src="js/app.js"></script>
   </head>
   <body>
+    <!-- Water mask for the wave heatmap. The path data lives in js/coastline.js;
+         `applyWaterClip` in js/app.js fills it in and points the overlay at it. -->
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <clipPath id="water-clip" clipPathUnits="objectBoundingBox">
+        <path id="water-clip-path" clip-rule="evenodd" />
+      </clipPath>
+    </svg>
+
     <div id="app">
       <div id="map-panel">
         <div id="map"></div>

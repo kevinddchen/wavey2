@@ -99,6 +99,58 @@ function drawLegend() {
 
 // ── Heatmap rendering ────────────────────────────────────────────────────────
 
+// Opacity of the heatmap over the water. It is clipped to the coastline (see
+// `applyWaterClip`), so this trades off against the basemap underneath rather
+// than against burying the shoreline.
+const HEAT_OPACITY = 0.8;
+
+// How many grid cells of wave height to spread onto the land side of the
+// shoreline. Land cells are null in the forecast and Leaflet stretches the image
+// ~500 m per cell, so without this the browser's interpolation fades the color
+// out over the last half kilometer of water — right where the clip cuts, leaving
+// a washed-out strip along the shore. Whatever spreads past the coastline is
+// clipped away.
+const HEAT_DILATE_CELLS = 2;
+
+// Wave height per grid cell at `tIdx` (NaN where there is none), with the values
+// along the shoreline dilated `HEAT_DILATE_CELLS` cells into the land.
+function heatmapField(data, tIdx) {
+    const { nx, ny } = data.metadata.grid;
+    const wh = data.wave_height;
+    let field = new Float32Array(nx * ny);
+    for (let c = 0; c < field.length; c++) {
+        const h = wh[c]?.[tIdx];
+        field[c] = h == null ? NaN : h;
+    }
+
+    for (let pass = 0; pass < HEAT_DILATE_CELLS; pass++) {
+        const src = field;
+        field = src.slice(); // each pass reads the previous one, so a cell filled now can't seed this pass
+        for (let y = 0; y < ny; y++) {
+            for (let x = 0; x < nx; x++) {
+                const c = y * nx + x;
+                if (!isNaN(src[c])) continue;
+                let sum = 0;
+                let n = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const yy = y + dy;
+                        const xx = x + dx;
+                        if (yy < 0 || yy >= ny || xx < 0 || xx >= nx) continue;
+                        const v = src[yy * nx + xx];
+                        if (!isNaN(v)) {
+                            sum += v;
+                            n++;
+                        }
+                    }
+                }
+                if (n > 0) field[c] = sum / n;
+            }
+        }
+    }
+    return field;
+}
+
 function buildHeatmapURL(data, tIdx) {
     const { nx, ny } = data.metadata.grid;
     const canvas = document.createElement("canvas");
@@ -106,13 +158,13 @@ function buildHeatmapURL(data, tIdx) {
     canvas.height = ny;
     const ctx = canvas.getContext("2d");
     const img = ctx.createImageData(nx, ny);
-    const wh = data.wave_height;
+    const field = heatmapField(data, tIdx);
 
     for (let y = 0; y < ny; y++) {
         for (let x = 0; x < nx; x++) {
-            const h = wh[y * nx + x]?.[tIdx];
+            const h = field[y * nx + x];
             const p = ((ny - 1 - y) * nx + x) * 4; // flip y so south=bottom
-            if (h == null || isNaN(h)) {
+            if (isNaN(h)) {
                 img.data[p + 3] = 0;
                 continue;
             }
@@ -125,6 +177,23 @@ function buildHeatmapURL(data, tIdx) {
     }
     ctx.putImageData(img, 0, 0);
     return canvas.toDataURL();
+}
+
+// Clip the heatmap overlay to the water, so it never paints over land whatever
+// its opacity. Leaflet places the overlay by projecting the grid's corners
+// and stretching the image between them, so the coastline in `js/coastline.js` is
+// pre-projected the same way — SVG objectBoundingBox units, x linear in longitude
+// and y linear in Web Mercator northing — and lands exactly on the basemap's own
+// coastline. (Spacing it linearly in latitude instead misses by up to 115 m over
+// the grid's 0.8° of latitude.) The browser applies the clip when compositing, so
+// it costs nothing per frame and survives every `setUrl`, pan and zoom.
+//
+// The empty <clipPath> it fills in lives in index.html; the path itself is the
+// unit square minus the land, hence the `clip-rule="evenodd"` there. The path is
+// built for the grid bounds it records, so regenerate it if those ever change.
+function applyWaterClip(img) {
+    document.getElementById("water-clip-path").setAttribute("d", COASTLINE.path);
+    img.style.clipPath = "url(#water-clip)";
 }
 
 // ── Grid lookup ──────────────────────────────────────────────────────────────
@@ -776,7 +845,8 @@ async function init() {
         [grid.lat_min, grid.lon_min],
         [grid.lat_max, grid.lon_max],
     ];
-    const heatLayer = L.imageOverlay("", mapBounds, { opacity: 0.8, interactive: false }).addTo(map);
+    const heatLayer = L.imageOverlay("", mapBounds, { opacity: HEAT_OPACITY, interactive: false }).addTo(map);
+    applyWaterClip(heatLayer.getElement());
     const drawArrows = initArrowOverlay(map, grid, () => data);
 
     // Charts (rebuilt by `setForecast` when the run changes, since the x-axis

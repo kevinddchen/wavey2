@@ -129,6 +129,17 @@ uv run python -m http.server 8000 & open http://localhost:8000
 
 A plain file server is required because the page uses `fetch()` to load `data/index.json` and the `data/*` data files, which browsers block over `file://` URLs.
 
+### Rebuild the coastline (rarely)
+
+The heatmap is clipped to the water so it never covers the land, using a
+coastline traced from [OpenStreetMap](https://www.openstreetmap.org/copyright) and baked into `js/coastline.js`.
+That file is committed and `fetch.sh` does not rebuild it — coastlines don't move. Re-run this only if the
+forecast grid's bounds change:
+
+```bash
+uv run scripts/build_coastline.py  # queries the Overpass API, rewrites js/coastline.js
+```
+
 ## Hosting on GitHub Pages
 
 1. Push this repository to GitHub.
