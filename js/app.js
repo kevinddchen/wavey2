@@ -687,10 +687,13 @@ function drawArrow(ctx, x, y, deg, len = 10) {
     ctx.lineTo(0, 0);
     ctx.lineTo(-len * 0.35, len * 0.3);
     ctx.closePath();
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.8)";
     ctx.fill();
     ctx.restore();
 }
+
+// Grid points to skip between arrows, indexed by map zoom (clamped at both ends).
+const ARROW_STEP_BY_ZOOM = [32, 32, 32, 32, 32, 32, 32, 32, 24, 24, 16, 12, 8, 4, 2, 1, 1];
 
 // Appended to a custom Leaflet pane (see `PANE_Z`) so it sits below the marker
 // panes but above the tile layer inside leaflet-map-pane's stacking context.
@@ -721,13 +724,19 @@ function initArrowOverlay(map, grid, getData) {
         const actx = arrowCanvas.getContext("2d");
         actx.clearRect(0, 0, arrowCanvas.width, arrowCanvas.height);
         const { nx, ny, lat_min, lat_max, lon_min, lon_max } = grid;
-        const step = 8; // draw an arrow every `step` grid points
+        const zoom = Math.round(map.getZoom());
+        const step = ARROW_STEP_BY_ZOOM[Math.max(0, Math.min(ARROW_STEP_BY_ZOOM.length - 1, zoom))];
+        // Zoomed in, most of the grid is off screen, and projecting a point costs more
+        // than the bounds test that skips it. The padding keeps arrows whose glyph
+        // straddles the edge of the view.
+        const view = map.getBounds().pad(0.05);
         for (let gy = 0; gy < ny; gy += step) {
+            const lat = lat_min + (gy / (ny - 1)) * (lat_max - lat_min);
             for (let gx = 0; gx < nx; gx += step) {
+                const lon = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
+                if (!view.contains([lat, lon])) continue;
                 const dir = getData().wave_dir[gy * nx + gx]?.[i];
                 if (dir == null || isNaN(dir)) continue;
-                const lat = lat_min + (gy / (ny - 1)) * (lat_max - lat_min);
-                const lon = lon_min + (gx / (nx - 1)) * (lon_max - lon_min);
                 const pt = map.latLngToContainerPoint([lat, lon]);
                 drawArrow(actx, pt.x, pt.y, dir);
             }
