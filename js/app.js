@@ -693,7 +693,7 @@ function drawArrow(ctx, x, y, deg, len = 10) {
 }
 
 // Grid points to skip between arrows, indexed by map zoom (clamped at both ends).
-const ARROW_STEP_BY_ZOOM = [32, 32, 32, 32, 32, 32, 32, 32, 24, 24, 16, 12, 8, 4, 2, 1, 1];
+const ARROW_STEP_BY_ZOOM = [64, 64, 64, 64, 64, 64, 64, 48, 32, 24, 16, 12, 8, 4, 2, 1, 1];
 
 // Appended to a custom Leaflet pane (see `PANE_Z`) so it sits below the marker
 // panes but above the tile layer inside leaflet-map-pane's stacking context.
