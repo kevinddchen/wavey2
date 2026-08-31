@@ -45,12 +45,21 @@ const MAX_ZOOM = 16;
 // panes they interleave with, so the map's whole stacking order reads in one place.
 // Keys are the pane names passed to `map.createPane`.
 //
-//   tilePane      200  (Leaflet)  basemap tiles
-//   overlayPane   400  (Leaflet)  wave-height heatmap
-//   labelPane     425             place labels — above the heatmap, below the data
-//   arrowPane     450             wave-direction arrows
-//   markerPane    600  (Leaflet)  comparison marker, buoys, dive sites
-//   primaryMarkerPane 700         the primary marker, above all other markers
+//   tilePane          200  (Leaflet)  basemap tiles
+//   overlayPane       400  (Leaflet)  wave-height heatmap
+//   labelPane         425             place labels — above the heatmap, below the data
+//   arrowPane         450             wave-direction arrows
+//   shadowPane        500  (Leaflet)  unused
+//   markerPane        600  (Leaflet)  the comparison marker
+//   tooltipPane       650  (Leaflet)  unused
+//   popupPane         700  (Leaflet)  unused
+//   primaryMarkerPane 700             the primary marker, above the comparison marker
+//
+// Dive sites and buoys are selector entries, not their own markers — picking one
+// moves the primary or comparison marker to it, so there are only ever two.
+// Note that primaryMarkerPane ties popupPane; nothing binds a popup or tooltip
+// today, but if anything ever does, the tie is broken only by DOM creation order
+// (the primary marker would win) — give this pane 650 before adding one.
 const PANE_Z = {
     labelPane: 425,
     arrowPane: 450,
@@ -847,8 +856,8 @@ async function init() {
     }).addTo(map);
     // Place labels ride in their own pane (see `PANE_Z`) above the heatmap, so coastal
     // town names stay readable through it, but below the arrows and markers so the
-    // forecast data still wins. `pointerEvents: none` keeps the tiles from swallowing
-    // the map clicks that select a grid cell.
+    // forecast data still wins. `pointerEvents: none` matches arrowPane: the labels are
+    // decoration, so they never take a hover or a click off anything underneath.
     const labelPane = map.createPane("labelPane");
     labelPane.style.zIndex = PANE_Z.labelPane;
     labelPane.style.pointerEvents = "none";
