@@ -29,9 +29,42 @@ const BUOYS = [
 // The comparison marker is only shown if `cmpLat`/`cmpLon` URL params are present.
 const DEFAULT_PRIMARY_SITE = SITE_BREAKWATER;
 
+// Esri's light gray canvas. Labels ship as a separate transparent overlay.
+const MAP_PROVIDER_URL =
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+const MAP_PROVIDER_LABELS_URL =
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
+const MAP_PROVIDER_ATTRIBUTION = "&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors";
+
 // Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
+// Tiles only exist through z16; past that Esri serves a "Map data not yet available" placeholder
 const DEFAULT_ZOOM = 11;
-const MAX_ZOOM = 18;
+const MAX_ZOOM = 16;
+
+// z-index of the custom Leaflet panes, listed bottom to top alongside the built-in
+// panes they interleave with, so the map's whole stacking order reads in one place.
+// Keys are the pane names passed to `map.createPane`.
+//
+//   tilePane          200  (Leaflet)  basemap tiles
+//   overlayPane       400  (Leaflet)  wave-height heatmap
+//   labelPane         425             place labels — above the heatmap, below the data
+//   arrowPane         450             wave-direction arrows
+//   shadowPane        500  (Leaflet)  unused
+//   markerPane        600  (Leaflet)  the comparison marker
+//   tooltipPane       650  (Leaflet)  unused
+//   popupPane         700  (Leaflet)  unused
+//   primaryMarkerPane 700             the primary marker, above the comparison marker
+//
+// Dive sites and buoys are selector entries, not their own markers — picking one
+// moves the primary or comparison marker to it, so there are only ever two.
+// Note that primaryMarkerPane ties popupPane; nothing binds a popup or tooltip
+// today, but if anything ever does, the tie is broken only by DOM creation order
+// (the primary marker would win) — give this pane 650 before adding one.
+const PANE_Z = {
+    labelPane: 425,
+    arrowPane: 450,
+    primaryMarkerPane: 700,
+};
 
 // Valid values for the `charts` URL param (matches the `data-chart` attribute
 // on each `.chart-container` in index.html).
@@ -659,14 +692,14 @@ function drawArrow(ctx, x, y, deg, len = 10) {
     ctx.restore();
 }
 
-// Appended to a custom Leaflet pane (z-index 450) so it sits below marker-pane
-// (600) but above the tile layer inside leaflet-map-pane's stacking context.
+// Appended to a custom Leaflet pane (see `PANE_Z`) so it sits below the marker
+// panes but above the tile layer inside leaflet-map-pane's stacking context.
 // `getData` returns the currently displayed forecast (it can change when the
 // user switches runs); the overlay owns a map pane + move handlers, so it's
 // created once and always reads the live data rather than being recreated.
 function initArrowOverlay(map, grid, getData) {
     const arrowPane = map.createPane("arrowPane");
-    arrowPane.style.zIndex = 450;
+    arrowPane.style.zIndex = PANE_Z.arrowPane;
     arrowPane.style.pointerEvents = "none";
     const arrowCanvas = document.createElement("canvas");
     arrowCanvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none";
@@ -788,7 +821,7 @@ async function init() {
     if (urlState.units != null) setUnits(urlState.units);
 
     // Kick off the forecast download now (without awaiting) so it overlaps with
-    // the data-independent DOM + map setup below — in particular the map's OSM
+    // the data-independent DOM + map setup below — in particular the map's basemap
     // tiles, which start downloading the moment the map is created. Only the
     // data-dependent overlays (heatmap, arrows, charts) wait on `dataPromise`.
     const dataPromise = loadData(urlState.forecast);
@@ -817,12 +850,23 @@ async function init() {
         [initialMarkerLat, initialMarkerLon],
         urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
     );
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+    L.tileLayer(MAP_PROVIDER_URL, {
+        attribution: MAP_PROVIDER_ATTRIBUTION,
         maxZoom: MAX_ZOOM,
     }).addTo(map);
-    // Primary marker sits on a dedicated pane above the default markerPane (z-index 600)
-    map.createPane("primaryMarkerPane").style.zIndex = 700;
+    // Place labels ride in their own pane (see `PANE_Z`) above the heatmap, so coastal
+    // town names stay readable through it, but below the arrows and markers so the
+    // forecast data still wins. `pointerEvents: none` matches arrowPane: the labels are
+    // decoration, so they never take a hover or a click off anything underneath.
+    const labelPane = map.createPane("labelPane");
+    labelPane.style.zIndex = PANE_Z.labelPane;
+    labelPane.style.pointerEvents = "none";
+    L.tileLayer(MAP_PROVIDER_LABELS_URL, {
+        pane: "labelPane",
+        maxZoom: MAX_ZOOM,
+    }).addTo(map);
+    // Primary marker sits on a dedicated pane above the default markerPane (see `PANE_Z`)
+    map.createPane("primaryMarkerPane").style.zIndex = PANE_Z.primaryMarkerPane;
 
     // Everything below needs the forecast data. `data`, `selectedId`, `times`, and
     // `nt` are reassigned by `setForecast` when the user switches runs in place.

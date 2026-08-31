@@ -42,7 +42,7 @@ The current marker positions are encoded in the URL so you can bookmark or share
 | `lon`             | Longitude of the blue (primary) marker                      |
 | `cmpLat`          | Latitude of the gold (comparison) marker                    |
 | `cmpLon`          | Longitude of the gold (comparison) marker                   |
-| `zoom`            | Initial map zoom level (integer, 0–18)                      |
+| `zoom`            | Initial map zoom level (integer, 0–16)                      |
 | `forecast`        | Id of the forecast run to show (e.g. `20260528_1200`)       |
 | `t`               | Initial time-slider index (integer)                         |
 | `play`            | Autostart the time animation on load                        |
