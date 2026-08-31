@@ -46,7 +46,12 @@ body.resizing {
     flex: 1;
 }
 
-#map .leaflet-tile-pane {
+/* Desaturate the basemap so the wave-height heatmap owns all of the map's color.
+   The place labels sit in their own pane (see `PANE_Z` in js/app.js), outside the
+   tile pane, so they need to be named separately. Leaflet builds a custom pane's
+   class by stripping "Pane" from the name: "labelPane" -> .leaflet-label-pane. */
+#map .leaflet-tile-pane,
+#map .leaflet-label-pane {
     filter: grayscale(100%);
 }
 
