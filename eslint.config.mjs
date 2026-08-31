@@ -22,10 +22,11 @@ export default [
         },
     },
     {
-        // VERSION is defined in version.js and consumed by app.js across <script> tags
+        // VERSION / COASTLINE are defined in version.js / coastline.js and consumed
+        // by app.js across <script> tags
         files: ["js/app.js"],
         languageOptions: {
-            globals: { VERSION: "readonly" },
+            globals: { VERSION: "readonly", COASTLINE: "readonly" },
         },
     },
 ];
