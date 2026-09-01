@@ -37,7 +37,6 @@ const MAP_PROVIDER_LABELS_URL =
 const MAP_PROVIDER_ATTRIBUTION = "&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors";
 
 // Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
-// Below z9 the whole forecast grid is a speck, so there is nothing to zoom out to.
 // Tiles only exist through z16; past that Esri serves a "Map data not yet available" placeholder
 const MIN_ZOOM = 9;
 const DEFAULT_ZOOM = 11;
