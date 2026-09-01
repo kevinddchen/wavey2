@@ -38,8 +38,13 @@ const MAP_PROVIDER_ATTRIBUTION = "&copy; Esri, HERE, Garmin, &copy; OpenStreetMa
 
 // Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
 // Tiles only exist through z16; past that Esri serves a "Map data not yet available" placeholder
+const MIN_ZOOM = 9;
 const DEFAULT_ZOOM = 11;
 const MAX_ZOOM = 16;
+
+// How far past the forecast grid the map can be panned, as a fraction of the grid's
+// own span added on each side (see `map.setMaxBounds`).
+const PAN_MARGIN = 0.25;
 
 // z-index of the custom Leaflet panes, listed bottom to top alongside the built-in
 // panes they interleave with, so the map's whole stacking order reads in one place.
@@ -784,7 +789,7 @@ function readUrlState() {
         lon: num("lon"),
         cmpLat: num("cmpLat"),
         cmpLon: num("cmpLon"),
-        zoom: zoom != null ? Math.max(0, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
+        zoom: zoom != null ? Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(zoom))) : null,
         forecast: p.get("forecast"),
         t: t != null ? Math.max(0, Math.round(t)) : null,
         play: bool("play"),
@@ -855,7 +860,7 @@ async function init() {
     // its tiles download in parallel with the forecast binary.
     const initialMarkerLat = urlState.lat != null ? urlState.lat : DEFAULT_PRIMARY_SITE.lat;
     const initialMarkerLon = urlState.lon != null ? urlState.lon : DEFAULT_PRIMARY_SITE.lon;
-    const map = L.map("map").setView(
+    const map = L.map("map", { minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }).setView(
         [initialMarkerLat, initialMarkerLon],
         urlState.zoom != null ? urlState.zoom : DEFAULT_ZOOM,
     );
@@ -912,6 +917,11 @@ async function init() {
         [grid.lat_min, grid.lon_min],
         [grid.lat_max, grid.lon_max],
     ];
+    // Panning is capped at the grid plus a margin — there is no forecast outside it, so
+    // there is nowhere useful to wander off to. Left at Leaflet's default viscosity, so a
+    // drag can overshoot and spring back: that reads better than a hard wall when the
+    // bounds are smaller than the viewport, which they are at `MIN_ZOOM`.
+    map.setMaxBounds(L.latLngBounds(mapBounds).pad(PAN_MARGIN));
     const heatLayer = L.imageOverlay("", mapBounds, { opacity: HEAT_OPACITY, interactive: false }).addTo(map);
     // Dilating past the shoreline only makes sense if the clip is there to cut it
     // back off again (see `HEAT_DILATE_CELLS`).
