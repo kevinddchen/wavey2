@@ -39,7 +39,7 @@ const MAP_PROVIDER_ATTRIBUTION = "&copy; Esri, HERE, Garmin, &copy; OpenStreetMa
 // Map zoom — `DEFAULT_ZOOM` is used when no `zoom` URL param is provided.
 // Tiles only exist through z16; past that Esri serves a "Map data not yet available" placeholder
 const MIN_ZOOM = 9;
-const DEFAULT_ZOOM = 11;
+const DEFAULT_ZOOM = 12;
 const MAX_ZOOM = 16;
 
 // How far past the forecast grid the map can be panned, as a fraction of the grid's
@@ -1038,8 +1038,6 @@ async function init() {
         const pt = nearestPoint(grid, lat, lon);
         if (!marker) marker = makeMarker(pt.lat, pt.lon, PRIMARY_COLOR, "primaryMarkerPane").addTo(map);
         else marker.setLatLng([pt.lat, pt.lon]);
-        document.getElementById("selected-coords").textContent =
-            `${pt.lat.toFixed(4)}°N, ${Math.abs(pt.lon).toFixed(4)}°W`;
         src1 = { idx: pt.idx };
         updateCharts(charts, data, src1, src2, tIdx);
     }
@@ -1059,7 +1057,6 @@ async function init() {
         if (slot === 1) {
             if (!marker) marker = makeMarker(buoy.lat, buoy.lon, PRIMARY_COLOR, "primaryMarkerPane").addTo(map);
             else marker.setLatLng([buoy.lat, buoy.lon]);
-            document.getElementById("selected-coords").textContent = buoy.name;
             src1 = { buoy, series };
             map.panTo([buoy.lat, buoy.lon]);
         } else {
