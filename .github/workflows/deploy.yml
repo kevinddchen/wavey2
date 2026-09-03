@@ -47,7 +47,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync
+          uv sync --group archive
 
       - name: Build site
         run: |
@@ -63,6 +63,18 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: _site/
+
+      - name: Configure AWS credentials
+        if: vars.AWS_ARCHIVE_BUCKET != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ARCHIVE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_ARCHIVE_REGION }}
+
+      - name: Archive GRIB2 files to S3
+        if: vars.AWS_ARCHIVE_BUCKET != ''
+        run: |
+          uv run scripts/sync_gribs.py --dir gribs --bucket "${{ vars.AWS_ARCHIVE_BUCKET }}"
 
   deploy:
     environment:

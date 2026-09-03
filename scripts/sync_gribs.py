@@ -1,0 +1,262 @@
+"""
+Sync downloaded NWPS GRIB2 files to an S3 bucket, for long-term archival.
+
+NOAA retains only about four days of Monterey Bay CG3 runs (two per day, 00Z and
+12Z), so studying forecast skill — how the forecast for a given time changes as
+its lead time shortens — means keeping runs as they are published. The deploy
+workflow already downloads every available run into `gribs/` on each build, so
+this script does no downloading of its own: it uploads whatever is in a local
+directory and not yet in the bucket.
+
+Objects are keyed by run time, so a month can be listed under one prefix and the
+whole archive sorts chronologically:
+
+    <prefix>/YYYY/MM/mtr_nwps_CG3_YYYYMMDD_HH00.grib2
+
+Uploads set S3's native SHA-256 checksum (so a corrupted transfer is rejected
+rather than stored) and repeat the digest in user metadata as `x-amz-meta-sha256`,
+so the archive can be verified years later — by which point re-downloading from
+NOAA is impossible. Files are also checked for GRIB2 framing before upload, so a
+truncated download does not become a permanent bad record.
+
+The bucket holds nothing but the GRIB2 files themselves; which runs are archived
+is whatever a listing of the prefix says it is.
+
+Because every invocation re-checks the whole local directory against the bucket,
+and the deploy workflow refreshes that directory from NOAA's full retention
+window, a missed or failed upload is retried by later builds: the archive
+self-heals as long as no more than about four days pass between successful runs.
+
+Credentials come from the usual boto3 chain; in CI that is the OIDC role assumed
+by the workflow. `--endpoint-url` points the same script at any S3-compatible
+store (R2, MinIO).
+
+Quick start
+-----------
+  uv run --group archive scripts/sync_gribs.py --bucket my-bucket --dry-run
+  uv run --group archive scripts/sync_gribs.py --bucket my-bucket
+"""
+
+import argparse
+import hashlib
+import logging
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.client import S3Client
+
+LOG = logging.getLogger(Path(__file__).stem)
+
+# Filenames NOAA serves, e.g. "mtr_nwps_CG3_20260831_1200.grib2".
+_GRIB_RE = re.compile(r"^mtr_nwps_CG3_(\d{4})(\d{2})(\d{2})_(\d{4})\.grib2$")
+
+# Every GRIB2 message starts with "GRIB" and ends with "7777"; a file that fails
+# this was truncated mid-download and must not be archived as if it were good.
+_GRIB_MAGIC = b"GRIB"
+_GRIB_END = b"7777"
+
+
+def parse_filename(filename: str) -> tuple[str, str, str]:
+    """
+    Split a NOAA GRIB2 filename into the parts the object key is built from.
+
+    Args:
+        filename: Basename like "mtr_nwps_CG3_20260831_1200.grib2".
+
+    Returns:
+        Tuple of (run_id, year, month), e.g. ("20260831_1200", "2026", "08").
+
+    Raises:
+        ValueError: If the filename is not a Monterey Bay CG3 GRIB2 file.
+    """
+
+    m = _GRIB_RE.match(filename)
+    if not m:
+        raise ValueError(f"not an NWPS CG3 GRIB2 filename: {filename!r}")
+    yyyy, mm, dd, hhmm = m.groups()
+    return f"{yyyy}{mm}{dd}_{hhmm}", yyyy, mm
+
+
+def object_key(prefix: str, filename: str) -> str:
+    """Build the S3 key for a GRIB2 file: "<prefix>/YYYY/MM/<filename>"."""
+    _, yyyy, mm = parse_filename(filename)
+    return f"{prefix}/{yyyy}/{mm}/{filename}"
+
+
+def check_grib2(path: Path) -> None:
+    """
+    Check that a file is a complete GRIB2 file.
+
+    Args:
+        path: Local file to check.
+
+    Raises:
+        ValueError: If the GRIB2 framing is missing, i.e. the file is truncated
+            or is not a GRIB2 file at all.
+    """
+
+    size = path.stat().st_size
+    if size < len(_GRIB_MAGIC) + len(_GRIB_END):
+        raise ValueError(f"{path.name} is too small to be a GRIB2 file ({size} bytes)")
+    with open(path, "rb") as f:
+        head = f.read(len(_GRIB_MAGIC))
+        f.seek(-len(_GRIB_END), 2)
+        tail = f.read(len(_GRIB_END))
+    if head != _GRIB_MAGIC or tail != _GRIB_END:
+        raise ValueError(f"{path.name} is not a complete GRIB2 file (head {head!r}, tail {tail!r})")
+
+
+def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
+    """
+    List the runs already in the bucket.
+
+    Args:
+        s3: S3 client.
+        bucket: Bucket name.
+        prefix: Key prefix the archive lives under (no trailing slash).
+
+    Returns:
+        Set of archived run ids. Keys that don't look like an NWPS GRIB2 file
+        (anything else sharing the prefix) are ignored.
+
+    Raises:
+        ClientError: If the bucket cannot be listed.
+    """
+
+    archived: set[str] = set()
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"{prefix}/"):
+        for obj in page.get("Contents", []):
+            try:
+                run_id, _, _ = parse_filename(obj["Key"].rsplit("/", 1)[-1])
+            except ValueError:
+                continue
+            archived.add(run_id)
+    return archived
+
+
+def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> str:
+    """
+    Upload one GRIB2 file, with checksums for later verification.
+
+    Args:
+        s3: S3 client.
+        path: Local GRIB2 file.
+        bucket: Bucket name.
+        key: Destination key.
+
+    Returns:
+        The file's SHA-256 hex digest.
+
+    Raises:
+        ClientError: If the upload is rejected (including a checksum mismatch).
+    """
+
+    with open(path, "rb") as f:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+        f.seek(0)
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=f,
+            ContentType="application/octet-stream",
+            ChecksumAlgorithm="SHA256",
+            Metadata={
+                "sha256": digest,
+                "archived-at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        )
+    return digest
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    ap = argparse.ArgumentParser(
+        description="Sync downloaded NWPS GRIB2 files to S3.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    # fmt: off
+    ap.add_argument(
+        "--dir", "-d", type=Path, default=Path("./gribs/"), help="Directory of .grib2 files to sync",
+    )
+    ap.add_argument(
+        "--bucket", "-b", required=True, help="Destination S3 bucket",
+    )
+    ap.add_argument(
+        "--prefix", "-p", default="nwps/mtr/CG3", help="Key prefix to archive under",
+    )
+    ap.add_argument(
+        "--endpoint-url", default=None, help="S3 endpoint, for S3-compatible stores (R2, MinIO)",
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="Report what would be uploaded, without uploading",
+    )
+    # fmt: on
+    args = ap.parse_args()
+
+    grib_dir: Path = args.dir
+    prefix: str = args.prefix.strip("/")
+
+    local: dict[str, Path] = {}
+    for path in sorted(grib_dir.glob("*.grib2")):
+        try:
+            run_id, _, _ = parse_filename(path.name)
+        except ValueError as e:
+            LOG.warning(f"Skipping {e}")
+            continue
+        local[run_id] = path
+    if not local:
+        raise FileNotFoundError(f"no mtr_nwps_CG3_<run_id>.grib2 files found in {grib_dir}")
+    LOG.info(f"Found {len(local)} local run(s) in '{grib_dir}'")
+
+    s3: "S3Client" = boto3.client("s3", endpoint_url=args.endpoint_url)
+    archived = list_archived(s3, args.bucket, prefix)
+    LOG.info(f"Bucket '{args.bucket}/{prefix}' holds {len(archived)} run(s)")
+
+    missing = sorted(set(local) - archived)
+    if not missing:
+        LOG.info("Nothing to sync; every local run is already in the bucket")
+        return
+    LOG.info(f"{len(missing)} run(s) to sync: {missing}")
+
+    if args.dry_run:
+        LOG.info("Dry run; stopping before upload")
+        return
+
+    failures: list[str] = []
+    uploaded = 0
+    for run_id in missing:
+        path = local[run_id]
+        key = object_key(prefix, path.name)
+        try:
+            check_grib2(path)
+            digest = upload(s3, path, args.bucket, key)
+        except (ValueError, ClientError, BotoCoreError, OSError) as e:
+            LOG.warning(f"Failed to sync '{path.name}': {e}")
+            failures.append(path.name)
+            continue
+
+        size = path.stat().st_size
+        LOG.info(f"Synced '{path.name}' to 's3://{args.bucket}/{key}' ({size / 1e6:.1f} MB, sha256 {digest[:12]}…)")
+        uploaded += 1
+
+    LOG.info(f"Synced {uploaded} run(s), {len(failures)} failure(s)")
+    if failures:
+        # NOAA drops runs after ~4 days, so a persistently broken sync is only
+        # recoverable for a few days — make it visible in the workflow log.
+        raise SystemExit(f"failed to sync: {sorted(failures)}")
+
+
+if __name__ == "__main__":
+    main()
