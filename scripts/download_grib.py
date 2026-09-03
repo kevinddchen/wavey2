@@ -274,6 +274,7 @@ def main() -> None:
         urls = [get_most_recent_forecast()]
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
+    downloaded = 0
     for url in urls:
         try:
             file_path = download_forecast(url, dir=args.out_dir)
@@ -282,6 +283,10 @@ def main() -> None:
             continue
 
         check_grib2(file_path)
+        downloaded += 1
+
+    if downloaded == 0:
+        raise RuntimeError(f"Failed to download any of the {len(urls)} available forecast(s).")
 
 
 if __name__ == "__main__":
