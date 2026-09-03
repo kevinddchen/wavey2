@@ -24,10 +24,6 @@ _GRIB_MAGIC = b"GRIB"
 _GRIB_END = b"7777"
 
 
-class CorruptForecastError(Exception):
-    """Raised when a download succeeds but the bytes aren't a GRIB2 file."""
-
-
 def get_most_recent_forecast() -> str:
     """
     Get most recent NWFS forecast data for Monterey bay.
@@ -77,7 +73,11 @@ def _iter_forecast_urls() -> Iterator[str]:
 
     for date in dates:
         LOG.info(f"Looking in '{date}'...")
-        for time in _list_times(date):
+        try:
+            times = _list_times(date)
+        except requests.HTTPError:
+            continue  # no forecasts on the given date; try next date
+        for time in times:
             if _check_time(date=date, time=time):
                 yield _get_url(date=date, time=time)
 
@@ -198,7 +198,6 @@ def download_forecast(url: str, dir: Path) -> Path:
 
     Raises:
         HTTPError: If error encountered during download.
-        CorruptForecastError: If the download is not a GRIB2 file.
     """
 
     file_path = dir / os.path.basename(url)
@@ -214,14 +213,12 @@ def download_forecast(url: str, dir: Path) -> Path:
         for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
             file.write(chunk)
 
-    _check_grib2(file_path)
-
     size_mb = file_path.stat().st_size / 1e6
     LOG.info(f"Downloaded '{url}' to '{file_path}' ({size_mb:.1f} MB)")
     return file_path
 
 
-def _check_grib2(path: Path) -> None:
+def check_grib2(path: Path) -> None:
     """
     Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
     ends with "7777".
@@ -230,7 +227,7 @@ def _check_grib2(path: Path) -> None:
         path: File to check.
 
     Raises:
-        CorruptForecastError: If the framing is missing.
+        RuntimeError: If the file is not a GRIB2 file.
     """
 
     size = path.stat().st_size
@@ -243,7 +240,7 @@ def _check_grib2(path: Path) -> None:
             return
     else:
         head = tail = b""
-    raise CorruptForecastError(f"'{path.name}' is not a GRIB2 file ({size} bytes, starts {head!r}, ends {tail!r})")
+    raise RuntimeError(f"'{path.name}' is not a GRIB2 file (starts {head!r}, ends {tail!r})")
 
 
 def main() -> None:
@@ -278,7 +275,13 @@ def main() -> None:
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
     for url in urls:
-        download_forecast(url, dir=args.out_dir)
+        try:
+            file_path = download_forecast(url, dir=args.out_dir)
+        except requests.HTTPError as e:
+            LOG.warning(f"Failed to download '{url}': {e}")
+            continue
+
+        check_grib2(file_path)
 
 
 if __name__ == "__main__":
