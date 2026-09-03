@@ -19,6 +19,14 @@ _CHUNK_SIZE = 8192
 # Seconds to wait for a connection / between received chunks before giving up.
 _TIMEOUT_SECS = 30
 
+# Framing of a GRIB2 file: it starts with "GRIB" and ends with "7777".
+_GRIB_MAGIC = b"GRIB"
+_GRIB_END = b"7777"
+
+
+class CorruptForecastError(Exception):
+    """Raised when a download succeeds but the bytes aren't a GRIB2 file."""
+
 
 def get_most_recent_forecast() -> str:
     """
@@ -190,6 +198,7 @@ def download_forecast(url: str, dir: Path) -> Path:
 
     Raises:
         HTTPError: If error encountered during download.
+        CorruptForecastError: If the download is not a GRIB2 file.
     """
 
     file_path = dir / os.path.basename(url)
@@ -205,9 +214,36 @@ def download_forecast(url: str, dir: Path) -> Path:
         for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
             file.write(chunk)
 
+    _check_grib2(file_path)
+
     size_mb = file_path.stat().st_size / 1e6
     LOG.info(f"Downloaded '{url}' to '{file_path}' ({size_mb:.1f} MB)")
     return file_path
+
+
+def _check_grib2(path: Path) -> None:
+    """
+    Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
+    ends with "7777".
+
+    Args:
+        path: File to check.
+
+    Raises:
+        CorruptForecastError: If the framing is missing.
+    """
+
+    size = path.stat().st_size
+    if size >= len(_GRIB_MAGIC) + len(_GRIB_END):
+        with open(path, "rb") as f:
+            head = f.read(len(_GRIB_MAGIC))
+            f.seek(-len(_GRIB_END), os.SEEK_END)
+            tail = f.read(len(_GRIB_END))
+        if head == _GRIB_MAGIC and tail == _GRIB_END:
+            return
+    else:
+        head = tail = b""
+    raise CorruptForecastError(f"'{path.name}' is not a GRIB2 file ({size} bytes, starts {head!r}, ends {tail!r})")
 
 
 def main() -> None:
