@@ -10,7 +10,7 @@ GRIBS="gribs"
 
 rm -rf "$DATA" "$GRIBS"
 mkdir -p "$DATA" "$GRIBS"
-uv run scripts/download_grib.py --all --out-dir "$GRIBS" || echo "WARNING: grib download failed"
+uv run scripts/download_grib.py --all --out-dir "$GRIBS"
 for f in "$GRIBS"/*.grib2; do
     uv run scripts/grib2bin.py "$f" --out-dir "$DATA" || echo "WARNING: failed to convert $f"
 done

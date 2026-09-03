@@ -19,6 +19,42 @@ _CHUNK_SIZE = 8192
 # Seconds to wait for a connection / between received chunks before giving up.
 _TIMEOUT_SECS = 30
 
+# Framing of a GRIB2 file: it starts with "GRIB" and ends with "7777".
+_GRIB_MAGIC = b"GRIB"
+_GRIB_END = b"7777"
+
+
+def get_most_recent_forecast() -> str:
+    """
+    Get most recent NWFS forecast data for Monterey bay.
+
+    Returns:
+        URL to the GRIB file.
+
+    Raises:
+        HTTPError: If accessing website returns error.
+        RuntimeError: If no forecasts were found.
+    """
+
+    url = next(_iter_forecast_urls(), None)
+    if url is None:
+        raise RuntimeError("Could not find any forecasts for Monterey bay.")
+    return url
+
+
+def get_all_available_forecasts() -> list[str]:
+    """
+    Get all available NWFS forecast data for Monterey bay.
+
+    Returns:
+        List of URLs to GRIB files, newest first.
+
+    Raises:
+        HTTPError: If accessing the index website returns an error.
+    """
+
+    return list(_iter_forecast_urls())
+
 
 def _iter_forecast_urls() -> Iterator[str]:
     """
@@ -33,78 +69,17 @@ def _iter_forecast_urls() -> Iterator[str]:
     """
 
     dates = _list_dates()
-    LOG.info(f"Found NWFS forecasts: {dates}")
+    LOG.info(f"Found forecast dates: {dates}")
 
     for date in dates:
         LOG.info(f"Looking in '{date}'...")
         try:
             times = _list_times(date)
         except requests.HTTPError:
-            continue
+            continue  # no forecasts on the given date; try next date
         for time in times:
             if _check_time(date=date, time=time):
                 yield _get_url(date=date, time=time)
-
-
-def get_most_recent_forecast() -> str:
-    """
-    Get most recent NWFS forecast data for Monterey bay.
-
-    Returns:
-        URL to the GRIB file.
-
-    Raises:
-        HTTPError: If accessing website returns error.
-    """
-
-    url = next(_iter_forecast_urls(), None)
-    assert url is not None, "Unexpected: could not find any forecasts for Monterey bay."
-    LOG.info(f"Found most recent forecast: {url}")
-    return url
-
-
-def get_all_available_forecasts() -> list[str]:
-    """
-    Get all available Monterey bay "CG3" forecasts retained on the server.
-
-    Unlike `get_all_forecasts`, this is not restricted to a single run hour: it
-    returns every (date, time) run that has a CG3 forecast, newest first.
-
-    Returns:
-        List of URLs to GRIB files, newest first.
-
-    Raises:
-        HTTPError: If accessing the index website returns an error.
-    """
-
-    return list(_iter_forecast_urls())
-
-
-def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
-    """
-    Navigate to URL and return all hrefs on the webpage.
-
-    Args:
-        url: URL of webpage.
-        regex: If provided, will only return matching hrefs.
-
-    Returns:
-        List of strings.
-
-    Raises:
-        HTTPError: If accessing URL returns error.
-    """
-
-    r = requests.get(url, timeout=_TIMEOUT_SECS)
-    r.raise_for_status()
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    hrefs: list[str] = [link["href"] for link in soup.find_all("a", href=True)]  # type: ignore[misc]
-
-    if regex is not None:
-        hrefs = list(filter(lambda x: re.match(regex, x), hrefs))
-
-    return hrefs
 
 
 def _list_dates() -> list[str]:
@@ -183,39 +158,40 @@ def _get_url(date: str, time: str) -> str:
     return os.path.join(_BASE_URL, date, _MTR, time, _CG3, filename)
 
 
-def get_all_forecasts(time: str = "06") -> list[str]:
+def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
     """
-    Get all NWFS forecast data for Monterey bay.
+    Navigate to URL and return all hrefs on the webpage.
 
     Args:
-        time: A string like "HH/".
+        url: URL of webpage.
+        regex: If provided, will only return matching hrefs.
 
     Returns:
-        List of URLS to GRIB files.
+        List of strings.
 
     Raises:
-        HTTPError: If accessing website returns error.
+        HTTPError: If accessing URL returns error.
     """
 
-    # 1. List dates with forecasts
-    dates = _list_dates()
-    LOG.info(f"Found NWFS forecasts: {dates}")
+    r = requests.get(url, timeout=_TIMEOUT_SECS)
+    r.raise_for_status()
 
-    # 2. For each date, check for Monterey bay forecast on the given time
-    good_dates = [date for date in dates if _check_time(date=date, time=time)]
+    soup = BeautifulSoup(r.text, "html.parser")
+    hrefs: list[str] = [link["href"] for link in soup.find_all("a", href=True)]  # type: ignore[misc]
 
-    return [_get_url(date=date, time=time) for date in good_dates]
+    if regex is not None:
+        hrefs = list(filter(lambda x: re.match(regex, x), hrefs))
+
+    return hrefs
 
 
-def download_forecast(url: str, dir: Path | None = None, path: Path | None = None) -> Path:
+def download_forecast(url: str, dir: Path) -> Path:
     """
     Download NWFS forecast data to disk.
 
     Args:
         url: URL to the GRIB file.
-        dir: Directory to save the file in. If none, will download to the
-            current directory. Ignored if `path` is set.
-        path: Full path to save the file to. Takes precedence over `dir`.
+        dir: Directory to save the file in.
 
     Returns:
         Path to the GRIB file.
@@ -224,14 +200,9 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
         HTTPError: If error encountered during download.
     """
 
-    if path is not None:
-        file_path = path
-    else:
-        if dir is None:
-            dir = Path(".")
-        file_path = dir / os.path.basename(url)
+    file_path = dir / os.path.basename(url)
     if file_path.exists():
-        LOG.info(f"'{file_path}' already exists. Skipping download")
+        LOG.warning(f"'{file_path}' already exists. Skipping download")
         return file_path
 
     r = requests.get(url, stream=True, timeout=_TIMEOUT_SECS)
@@ -247,40 +218,82 @@ def download_forecast(url: str, dir: Path | None = None, path: Path | None = Non
     return file_path
 
 
+def check_grib2(path: Path) -> None:
+    """
+    Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
+    ends with "7777".
+
+    Args:
+        path: File to check.
+
+    Raises:
+        RuntimeError: If the file is not a GRIB2 file.
+    """
+
+    size = path.stat().st_size
+    if size >= len(_GRIB_MAGIC) + len(_GRIB_END):
+        with open(path, "rb") as f:
+            head = f.read(len(_GRIB_MAGIC))
+            f.seek(-len(_GRIB_END), os.SEEK_END)
+            tail = f.read(len(_GRIB_END))
+        if head == _GRIB_MAGIC and tail == _GRIB_END:
+            return
+    else:
+        head = tail = b""
+    raise RuntimeError(f"'{path.name}' is not a GRIB2 file (starts {head!r}, ends {tail!r})")
+
+
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # =========================================================================
 
     ap = argparse.ArgumentParser(
         description="Download Monterey Bay NWPS GRIB2 forecasts.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    # fmt: off
     ap.add_argument(
-        "--all", "-a", action="store_true", help="Download every available forecast",
+        "--all",
+        "-a",
+        action="store_true",
+        help="Download every available forecast",
     )
     ap.add_argument(
-        "--out-dir", "-o", type=Path, default=Path("./gribs/"), help="Output directory to save the .grib2 files",
+        "--out-dir",
+        "-o",
+        type=Path,
+        default=Path("./gribs/"),
+        help="Output directory to save the .grib2 files",
     )
-    # fmt: on
     args = ap.parse_args()
+
+    # =========================================================================
 
     if args.all:
         urls = get_all_available_forecasts()
         LOG.info(f"Found {len(urls)} forecast(s)")
     else:
         urls = [get_most_recent_forecast()]
+        LOG.info(f"Found most recent forecast: {urls[0]}")
 
+    downloaded = 0
     for url in urls:
         try:
-            download_forecast(url, dir=args.out_dir)
+            file_path = download_forecast(url, dir=args.out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
             continue
 
+        check_grib2(file_path)
+        downloaded += 1
+
+    if downloaded == 0:
+        raise RuntimeError(f"Failed to download any of the {len(urls)} available forecast(s).")
+
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
     main()
