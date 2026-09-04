@@ -67,7 +67,7 @@ never hardcode a buoy filename, it resolves it from the manifest by id.
   docstring), `decodeBinary` in `js/app.js` (reader), and `read_header` in `wavey2/apps/build_index.py`
   (header-only reader) all encode the same layout: `[u32 LE header_len][JSON header][typed LE arrays]`,
   cell-major/time-minor, gzipped. Bump `header.version` when the layout changes. Per-variable
-  quantization (dtype, scale, sentinel, linear/sqrt transform) lives in `QUANT`/`DTYPE_INFO` and is
+  quantization (dtype, scale, sentinel, linear/sqrt transform) lives in `_QUANT`/`_DTYPE_INFO` and is
   declared in the header, so the decoder stays generic — prefer changing the tables over the decoder.
 - **Units and direction conventions.** Data files stay in NOAA's native form: meters, and wave
   direction as the direction waves come _from_. The page applies display scaling (`UNIT_SCALE`) and

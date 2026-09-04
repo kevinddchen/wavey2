@@ -34,7 +34,7 @@ JSON header schema
     "nt":     int,                   // number of timesteps (= len(metadata.times))
     "variables": [
       // One entry per binary array, in the order they appear in the payload.
-      // `dtype` is one of "uint8" | "int8" | "int16" (see DTYPE_INFO below);
+      // `dtype` is one of "uint8" | "int8" | "int16" (see _DTYPE_INFO below);
       // `sentinel` is the encoded value that means "null" (no data — e.g. land
       // cells for wave fields). `transform` is "linear" (default) or "sqrt";
       // the decoder applies the inverse (identity / square). Real value is:
