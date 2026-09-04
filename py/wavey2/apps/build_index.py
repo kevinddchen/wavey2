@@ -48,7 +48,6 @@ def read_header(path: Path) -> dict[str, Any]:
 
 def main(
     data_dir: Path = Path("./data/"),
-    /,
     out_path: Path | None = None,
 ) -> None:
     """

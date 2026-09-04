@@ -17,4 +17,4 @@ done
 for id in 46236 46239; do
     uv run -m wavey2.apps.download_buoy "$id" --out-dir "$DATA" || echo "WARNING: buoy $id fetch failed"
 done
-uv run -m wavey2.apps.build_index "$DATA"
+uv run -m wavey2.apps.build_index --data-dir "$DATA"
