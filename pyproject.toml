@@ -14,8 +14,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "boto3-stubs[s3]",
-    "mypy",
     "ruff",
+    "ty",
     "types-requests",
 ]
 archive = [
@@ -33,15 +33,8 @@ pattern = '^const VERSION = "(?P<version>.+?)";'
 [tool.hatch.build.targets.wheel]
 packages = ["py/wavey2"]
 
-[tool.mypy]
-python_version = "3.14"
-strict = true
-
-[[tool.mypy.overrides]]
-module = [
-    "pygrib",
-]
-ignore_missing_imports = true
+[tool.ty.environment]
+python-version = "3.14"
 
 [tool.ruff]
 line-length = 120

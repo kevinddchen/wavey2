@@ -190,7 +190,9 @@ def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]
         size = os.fstat(tmp.fileno()).st_size
 
         tmp.seek(0)
-        digest = hashlib.file_digest(tmp, "sha256").hexdigest()
+        # `NamedTemporaryFile` proxies `readinto` to the real file at runtime, but
+        # typeshed only exposes it through `__getattr__`, which ty won't match.
+        digest = hashlib.file_digest(tmp, "sha256").hexdigest()  # ty: ignore[invalid-argument-type]
 
         tmp.seek(0)
         s3.put_object(
@@ -222,11 +224,11 @@ def main(
     Sync downloaded NWPS GRIB2 files to S3.
 
     Args:
-        bucket: Destination S3 bucket
-        grib_dir: Directory of .grib2 files to sync
-        prefix: Key prefix to archive under
-        endpoint_url: S3 endpoint, for S3-compatible stores (R2, MinIO)
-        dry_run: Report what would be uploaded, without uploading
+        bucket: Destination S3 bucket.
+        grib_dir: Directory of .grib2 files to sync.
+        prefix: Key prefix to archive under.
+        endpoint_url: S3 endpoint, for S3-compatible stores (R2, MinIO).
+        dry_run: Report what would be uploaded, without uploading.
     """
 
     prefix = prefix.strip("/")

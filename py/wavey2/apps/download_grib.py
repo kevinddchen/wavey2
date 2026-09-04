@@ -179,7 +179,7 @@ def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
-    hrefs: list[str] = [link["href"] for link in soup.find_all("a", href=True)]  # type: ignore[misc]
+    hrefs: list[str] = [link["href"] for link in soup.find_all("a", href=True)]  # ty: ignore[invalid-assignment]
 
     if regex is not None:
         hrefs = list(filter(lambda x: re.match(regex, x), hrefs))
