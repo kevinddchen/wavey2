@@ -38,8 +38,8 @@ store (R2, MinIO).
 
 Quick start
 -----------
-  uv run --group archive scripts/sync_gribs.py --bucket my-bucket --dry-run
-  uv run --group archive scripts/sync_gribs.py --bucket my-bucket
+  uv run --group archive -m wavey2.apps.sync_gribs --bucket my-bucket --dry-run
+  uv run --group archive -m wavey2.apps.sync_gribs --bucket my-bucket
 """
 
 import argparse

@@ -54,8 +54,8 @@ The reader is `decodeBinary` in `js/app.js`.
 
 Quick start
 -----------
-  python grib2bin.py mtr_nwps_CG3_20260430_1200.grib2 --list
-  python grib2bin.py mtr_nwps_CG3_20260430_1200.grib2
+  python -m wavey2.apps.grib2bin mtr_nwps_CG3_20260430_1200.grib2 --list
+  python -m wavey2.apps.grib2bin mtr_nwps_CG3_20260430_1200.grib2
 
 """
 

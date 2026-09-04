@@ -1,6 +1,6 @@
 [project]
 name = "wavey2"
-version = "0.0.0" # Placeholder; version is tracked in `js/version.js`
+dynamic = ["version"] # Read from `js/version.js`; see `[tool.hatch.version]`
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4",
@@ -19,6 +19,17 @@ dev = [
 archive = [
     "boto3",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "js/version.js"
+pattern = '^const VERSION = "(?P<version>.+?)";'
+
+[tool.hatch.build.targets.wheel]
+packages = ["py/wavey2"]
 
 [tool.mypy]
 python_version = "3.14"

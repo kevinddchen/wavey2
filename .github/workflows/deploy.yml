@@ -74,7 +74,7 @@ jobs:
       - name: Archive GRIB2 files to S3
         if: vars.AWS_ARCHIVE_BUCKET != ''
         run: |
-          uv run scripts/sync_gribs.py --dir gribs --bucket "${{ vars.AWS_ARCHIVE_BUCKET }}"
+          uv run -m wavey2.apps.sync_gribs --dir gribs --bucket "${{ vars.AWS_ARCHIVE_BUCKET }}"
 
   deploy:
     environment:
