@@ -35,19 +35,21 @@ and the +180° "direction-toward" convention to both (see `initData` / `initBuoy
 in `js/app.js`). Missing values become `null`.
 """
 
-import argparse
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import requests
+import tyro
+
+from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
 
 # Known buoys
-BUOYS = ("46236", "46239")
+BuoyId = Literal["46236", "46239"]
 
 _BASE_URL = "https://www.ndbc.noaa.gov/data/realtime2"
 
@@ -122,7 +124,7 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
     refreshed file gets a distinct URL and won't be served stale from cache.
 
     Args:
-        buoy_id: NDBC station id (must be a key in `BUOYS`).
+        buoy_id: NDBC station id (must be one of `BuoyId`).
         out_dir: Directory to write the JSON file into.
         lookback_days: Keep observations from the last this many days.
 
@@ -161,33 +163,28 @@ def download_buoy(buoy_id: str, out_dir: Path, lookback_days: int | None = None)
     return out_path
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Download NDBC buoy observations as JSON for the dive conditions viewer.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # fmt: off
-    ap.add_argument(
-        "--buoy-id", "-b", required=True, choices=sorted(BUOYS), help="NDBC station id",
-    )
-    ap.add_argument(
-        "--out-dir", "-o", type=Path, default=Path("./data/"), help="Output directory to save the .json file",
-    )
-    ap.add_argument(
-        "--lookback-days",
-        "-d",
-        type=int,
-        default=5,
-        help="Keep observations from the last N days",
-    )
-    # fmt: on
-    args = ap.parse_args()
+def main(
+    buoy_id: BuoyId,
+    /,
+    out_dir: Path = Path("./data/"),
+    lookback_days: int = 5,
+) -> None:
+    """
+    Download NDBC buoy observations as JSON for the dive conditions viewer.
 
-    download_buoy(buoy_id=args.buoy_id, out_dir=args.out_dir, lookback_days=args.lookback_days)
+    Args:
+        buoy_id: NDBC station id
+        out_dir: Output directory to save the .json file
+        lookback_days: Keep observations from the last N days
+    """
+
+    download_buoy(
+        buoy_id=buoy_id,
+        out_dir=out_dir,
+        lookback_days=lookback_days,
+    )
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)

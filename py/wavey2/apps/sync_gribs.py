@@ -42,7 +42,6 @@ Quick start
   uv run --group archive -m wavey2.apps.sync_gribs --bucket my-bucket
 """
 
-import argparse
 import gzip
 import hashlib
 import logging
@@ -55,7 +54,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import boto3
+import tyro
 from botocore.exceptions import BotoCoreError, ClientError
+
+from wavey2.logging import setup_logging
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client
@@ -209,32 +211,25 @@ def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]
     return raw_digest, size
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Sync downloaded NWPS GRIB2 files to S3.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # fmt: off
-    ap.add_argument(
-        "--dir", "-d", type=Path, default=Path("./gribs/"), help="Directory of .grib2 files to sync",
-    )
-    ap.add_argument(
-        "--bucket", "-b", required=True, help="Destination S3 bucket",
-    )
-    ap.add_argument(
-        "--prefix", "-p", default="nwps/mtr/CG3", help="Key prefix to archive under",
-    )
-    ap.add_argument(
-        "--endpoint-url", default=None, help="S3 endpoint, for S3-compatible stores (R2, MinIO)",
-    )
-    ap.add_argument(
-        "--dry-run", action="store_true", help="Report what would be uploaded, without uploading",
-    )
-    # fmt: on
-    args = ap.parse_args()
+def main(
+    bucket: str,
+    grib_dir: Path = Path("./gribs/"),
+    prefix: str = "nwps/mtr/CG3",
+    endpoint_url: str | None = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Sync downloaded NWPS GRIB2 files to S3.
 
-    grib_dir: Path = args.dir
-    prefix: str = args.prefix.strip("/")
+    Args:
+        bucket: Destination S3 bucket
+        grib_dir: Directory of .grib2 files to sync
+        prefix: Key prefix to archive under
+        endpoint_url: S3 endpoint, for S3-compatible stores (R2, MinIO)
+        dry_run: Report what would be uploaded, without uploading
+    """
+
+    prefix = prefix.strip("/")
 
     local: dict[str, Path] = {}
     for path in sorted(grib_dir.glob("*.grib2")):
@@ -248,9 +243,9 @@ def main() -> None:
         raise FileNotFoundError(f"no mtr_nwps_CG3_<run_id>.grib2 files found in {grib_dir}")
     LOG.info(f"Found {len(local)} local run(s) in '{grib_dir}'")
 
-    s3: "S3Client" = boto3.client("s3", endpoint_url=args.endpoint_url)
-    archived = list_archived(s3, args.bucket, prefix)
-    LOG.info(f"Bucket '{args.bucket}/{prefix}' holds {len(archived)} run(s)")
+    s3: "S3Client" = boto3.client("s3", endpoint_url=endpoint_url)
+    archived = list_archived(s3, bucket, prefix)
+    LOG.info(f"Bucket '{bucket}/{prefix}' holds {len(archived)} run(s)")
 
     missing = sorted(set(local) - archived)
     if not missing:
@@ -258,7 +253,7 @@ def main() -> None:
         return
     LOG.info(f"{len(missing)} run(s) to sync: {missing}")
 
-    if args.dry_run:
+    if dry_run:
         LOG.info("Dry run; stopping before upload")
         return
 
@@ -269,7 +264,7 @@ def main() -> None:
         key = object_key(prefix, path.name)
         try:
             check_grib2(path)
-            digest, size = upload(s3, path, args.bucket, key)
+            digest, size = upload(s3, path, bucket, key)
         except (ValueError, ClientError, BotoCoreError, OSError) as e:
             LOG.warning(f"Failed to sync '{path.name}': {e}")
             failures.append(path.name)
@@ -277,7 +272,7 @@ def main() -> None:
 
         raw_size = path.stat().st_size
         LOG.info(
-            f"Synced '{path.name}' to 's3://{args.bucket}/{key}' "
+            f"Synced '{path.name}' to 's3://{bucket}/{key}' "
             f"({raw_size / 1e6:.1f} -> {size / 1e6:.1f} MB gzipped, {size / raw_size:.0%}; sha256 {digest[:12]}…)"
         )
         uploaded += 1
@@ -290,7 +285,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)

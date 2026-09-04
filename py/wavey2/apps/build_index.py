@@ -18,7 +18,6 @@ newest file per buoy id is listed. The website (`loadData` in `js/app.js`) fetch
 this to populate the forecast selector and to resolve which files to load.
 """
 
-import argparse
 import gzip
 import json
 import logging
@@ -26,6 +25,10 @@ import re
 import struct
 from pathlib import Path
 from typing import Any
+
+import tyro
+
+from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
 
@@ -43,23 +46,19 @@ def read_header(path: Path) -> dict[str, Any]:
     return result
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Build data/index.json from waves_<id>.bin.gz files.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # fmt: off
-    ap.add_argument(
-        "--dir", "-d", type=Path, default=Path("./data/"), help="Directory of waves_*.bin.gz files",
-    )
-    ap.add_argument(
-        "--out", type=Path, default=None, help="Output path. If none, defaults to <data-dir>/index.json",
-    )
-    # fmt: on
-    args = ap.parse_args()
+def main(
+    data_dir: Path = Path("./data/"),
+    out_path: Path | None = None,
+) -> None:
+    """
+    Build data/index.json from waves_<id>.bin.gz files.
 
-    data_dir: Path = args.dir
-    out_path: Path = args.out or data_dir / "index.json"
+    Args:
+        data_dir: Directory of waves_*.bin.gz files
+        out_path: Output path. If none, defaults to <data-dir>/index.json
+    """
+
+    out_path = out_path or data_dir / "index.json"
 
     forecasts: list[dict[str, Any]] = []
     for path in sorted(data_dir.glob("waves_*.bin.gz")):
@@ -101,7 +100,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)
