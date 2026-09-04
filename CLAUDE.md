@@ -8,6 +8,10 @@ A dependency-free static webpage (`index.html` + `css/style.css` + `js/app.js`) 
 NWPS wave forecasts for Monterey Bay dive planning. Python scripts in `scripts/` fetch and transcode
 the forecast data into a compact binary the page decodes in the browser. Deployed to GitHub Pages.
 
+Code the scripts share lives in the `wavey2` package under `py/` (an editable install — `uv sync`
+puts it on the path, so `import wavey2` works from any script). The scripts in `scripts/` stay the
+CLI entry points; `py/wavey2/` holds the library code behind them.
+
 ## Commands
 
 Setup:
@@ -90,9 +94,11 @@ never hardcode a buoy filename, it resolves it from the manifest by id.
 
 ## Releasing
 
-`js/version.js` is the source of truth for the version (`pyproject.toml`'s is a placeholder). The
-deploy workflow checks out the **latest git tag**, not `main`, so merged changes do not go live until
-a `vX.Y.Z` tag exists: bump `js/version.js` in a commit titled `vX.Y.Z`, then tag it. Deploys also run
-on a 4×/day cron to refresh forecast data.
+`js/version.js` is the source of truth for the version — `pyproject.toml` declares it `dynamic` and
+hatchling scrapes it back out of that file (`[tool.hatch.version]`), so the two can't drift and only
+one file needs bumping. That regex matches the literal `const VERSION = "..."` line, so keep the
+line's shape. The deploy workflow checks out the **latest git tag**, not `main`, so merged changes
+do not go live until a `vX.Y.Z` tag exists: bump `js/version.js` in a commit titled `vX.Y.Z`, then
+tag it. Deploys also run on a 4×/day cron to refresh forecast data.
 
 Commit titles follow `type: Title (#PR)` (`feat`, `fix`, `perf`, `refactor`, `chore`).
