@@ -282,7 +282,10 @@ def _out_filename(input_path: Path) -> str:
     """Derive `waves_<run_id>.bin.gz` from an `mtr_nwps_CG3_<run_id>.grib2` name."""
     m = re.search(r"(\d{8}_\d{4})", input_path.name)
     if not m:
-        raise ValueError(f"could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; pass --out explicitly")
+        raise ValueError(
+            f"could not parse run id (YYYYMMDD_HHMM) from {input_path.name!r}; "
+            "expected a name like 'mtr_nwps_CG3_20260430_1200.grib2'"
+        )
     return f"waves_{m.group(1)}.bin.gz"
 
 
