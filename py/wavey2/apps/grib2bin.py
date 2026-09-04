@@ -18,37 +18,10 @@ decompresses it via `DecompressionStream` before decoding.
 
 JSON header schema
 ------------------
-  {
-    "version": 1,                    // bump when the layout changes
-    "metadata": {
-      "source":        "NOAA NWPS – mtr_nwps_CG3_YYYYMMDD_HH00.grib2",
-      "forecast_time": "YYYY-MM-DDTHH:MM:SSZ",   // GRIB2 analysis time (UTC)
-      "times":         ["YYYY-MM-DDTHH:MM:SSZ", ...],  // one per timestep, length = nt
-      "grid":          { "nx": int, "ny": int,
-                         "lat_min": float, "lat_max": float,
-                         "lon_min": float, "lon_max": float },
-      "units":         { "wave_height": "m", "wave_dir": "deg",
-                         "wave_period": "s", "water_level": "m" }
-    },
-    "ncells": int,                   // = grid.nx * grid.ny
-    "nt":     int,                   // number of timesteps (= len(metadata.times))
-    "variables": [
-      // One entry per binary array, in the order they appear in the payload.
-      // `dtype` is one of "uint8" | "int8" | "int16" (see _DTYPE_INFO below);
-      // `sentinel` is the encoded value that means "null" (no data — e.g. land
-      // cells for wave fields). `transform` is "linear" (default) or "sqrt";
-      // the decoder applies the inverse (identity / square). Real value is:
-      //     real = inv_transform(int_value / scale)   (when int_value != sentinel)
-      { "name":      "wave_height",
-        "dtype":     "uint8",
-        "scale":     90.51,          // step depends on transform; for sqrt,
-        "sentinel":  255,
-        "transform": "sqrt" },       // encode sqrt(real); decode squares the result
-      { "name": "wave_dir",    "dtype": "uint8", "scale": 0.5, "sentinel": 255,  "transform": "linear" },
-      { "name": "wave_period", "dtype": "uint8", "scale": 8,   "sentinel": 255,  "transform": "linear" },
-      { "name": "water_level", "dtype": "int8",  "scale": 40,  "sentinel": -128, "transform": "linear" }
-    ]
-  }
+The `wavey2.header.Header` model, serialized compactly. It declares the grid, the
+time axis, and the per-variable quantization (`dtype`, `scale`, `sentinel`,
+`transform`) that the decoder needs to turn the payload back into real values.
+`build_index` validates the same model when it reads the header back.
 
 The reader is `decodeBinary` in `js/app.js`.
 
@@ -60,7 +33,6 @@ Quick start
 """
 
 import gzip
-import json
 import logging
 import re
 import struct
@@ -72,6 +44,7 @@ import numpy.typing as npt
 import pygrib
 import tyro
 
+from wavey2.header import Grid, Header, Metadata, Units, Variable
 from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
@@ -253,7 +226,7 @@ def quantize(
 
 def write_binary(
     out_path: Path,
-    metadata: dict[str, Any],
+    metadata: Metadata,
     arrays: list[tuple[str, npt.NDArray[Any]]],
 ) -> None:
     """Write [u32 header_len][JSON header][quantized arrays], gzip-compressed."""
@@ -261,24 +234,23 @@ def write_binary(
     for name, arr in arrays:
         assert arr.shape == (ncells, nt), f"{name} shape mismatch: {arr.shape}"
 
-    header = {
-        "version": 1,
-        "metadata": metadata,
-        "ncells": int(ncells),
-        "nt": int(nt),
-        "variables": [
-            {
-                "name": name,
-                "dtype": _QUANT[name]["dtype"],
-                "scale": _QUANT[name]["scale"],
-                "sentinel": _DTYPE_INFO[_QUANT[name]["dtype"]]["sentinel"],
-                "transform": _QUANT[name].get("transform", "linear"),
-            }
+    header = Header(
+        metadata=metadata,
+        ncells=int(ncells),
+        nt=int(nt),
+        variables=[
+            Variable(
+                name=name,
+                dtype=_QUANT[name]["dtype"],
+                scale=_QUANT[name]["scale"],
+                sentinel=_DTYPE_INFO[_QUANT[name]["dtype"]]["sentinel"],
+                transform=_QUANT[name].get("transform", "linear"),
+            )
             for name, _ in arrays
         ],
-    }
+    )
 
-    header_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    header_bytes = header.model_dump_json().encode("utf-8")
     # Pad so the binary payload starts on a 4-byte boundary
     pad = (-len(header_bytes)) % 4
     header_bytes += b" " * pad
@@ -334,22 +306,22 @@ def main(
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     nt, ny, nx = arr_h.shape
 
-    grid = {
-        "nx": int(nx),
-        "ny": int(ny),
-        "lat_min": float(lats[0]),
-        "lat_max": float(lats[-1]),
-        "lon_min": float(lons[0]),
-        "lon_max": float(lons[-1]),
-    }
+    grid = Grid(
+        nx=int(nx),
+        ny=int(ny),
+        lat_min=float(lats[0]),
+        lat_max=float(lats[-1]),
+        lon_min=float(lons[0]),
+        lon_max=float(lons[-1]),
+    )
 
-    metadata: dict[str, Any] = {
-        "source": f"NOAA NWPS – {path.name}",
-        "forecast_time": ref_time or times_iso[0],
-        "times": times_iso,
-        "grid": grid,
-        "units": {"wave_height": "m", "wave_dir": "deg", "wave_period": "s", "water_level": "m"},
-    }
+    metadata = Metadata(
+        source=f"NOAA NWPS – {path.name}",
+        forecast_time=ref_time or times_iso[0],
+        times=times_iso,
+        grid=grid,
+        units=Units(wave_height="m", wave_dir="deg", wave_period="s", water_level="m"),
+    )
 
     def empty(name: str) -> npt.NDArray[Any]:
         info = _DTYPE_INFO[_QUANT[name]["dtype"]]
