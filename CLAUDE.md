@@ -24,7 +24,7 @@ npm install          # JS lint/format tooling only — no runtime deps, no bundl
 Checks (mirrors `.github/workflows/check.yml` — there is no test suite):
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run mypy .
+uv run ruff check . && uv run ruff format --check . && uv run ty check .
 npm run eslint && npm run prettier
 ```
 

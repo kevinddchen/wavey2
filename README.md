@@ -159,7 +159,7 @@ npm install
 ### Python checks
 
 ```bash
-uv run mypy .
+uv run ty check .
 uv run ruff check
 uv run ruff format --check
 ```

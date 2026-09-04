@@ -238,7 +238,7 @@ def main(
     Build the coastline water mask the wave heatmap is clipped to.
 
     Args:
-        out_path: Output .js file to write
+        out_path: Output .js file to write.
     """
 
     build_coastline(out_path=out_path)

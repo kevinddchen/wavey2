@@ -95,7 +95,7 @@ Msg = dict[str, Any]
 
 def list_variables(path: Path) -> None:
     """Log every distinct variable in a GRIB2 file, for picking the `*_NAME` constants above."""
-    grbs = pygrib.open(path)
+    grbs = pygrib.open(path)  # ty: ignore[unresolved-attribute]
     seen: dict[tuple[Any, ...], dict[str, Any]] = {}
     for grb in grbs:
         key = (grb.shortName, grb.name, grb.typeOfLevel, grb.level)
@@ -128,7 +128,7 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
         _LEVEL_NAME: [],
     }
 
-    grbs = pygrib.open(path)
+    grbs = pygrib.open(path)  # ty: ignore[unresolved-attribute]
     for grb in grbs:
         sn = grb.shortName
         if sn not in targets:
