@@ -28,6 +28,7 @@ from typing import Any
 
 import tyro
 
+from wavey2.header import Header
 from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
@@ -37,13 +38,12 @@ _WAVES_RE = re.compile(r"^waves_(\d{8}_\d{4})\.bin\.gz$")
 _BUOY_RE = re.compile(r"^buoy_(\w+)_(\d{8}_\d{4})\.json$")
 
 
-def read_header(path: Path) -> dict[str, Any]:
+def read_header(path: Path) -> Header:
     """Read the JSON header from a waves_*.bin.gz file (see grib2bin.write_binary)."""
     with gzip.open(path, "rb") as f:
         (header_len,) = struct.unpack("<I", f.read(4))
         header_bytes = f.read(header_len)
-    result: dict[str, Any] = json.loads(header_bytes)
-    return result
+    return Header.model_validate_json(header_bytes)
 
 
 def main(
@@ -54,8 +54,8 @@ def main(
     Build data/index.json from waves_<id>.bin.gz files.
 
     Args:
-        data_dir: Directory of waves_*.bin.gz files
-        out_path: Output path. If none, defaults to <data-dir>/index.json
+        data_dir: Directory of waves_*.bin.gz files.
+        out_path: Output path. If none, defaults to <data-dir>/index.json.
     """
 
     out_path = out_path or data_dir / "index.json"
@@ -65,17 +65,13 @@ def main(
         m = _WAVES_RE.match(path.name)
         if not m:
             continue
-        try:
-            metadata = read_header(path).get("metadata", {})
-        except Exception as e:
-            LOG.warning(f"WARNING: skipping {path.name}: {e}")
-            continue
+        metadata = read_header(path).metadata
         forecasts.append(
             {
                 "id": m.group(1),
                 "file": path.name,
-                "forecast_time": metadata.get("forecast_time"),
-                "source": metadata.get("source"),
+                "forecast_time": metadata.forecast_time,
+                "source": metadata.source,
             }
         )
 
