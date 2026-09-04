@@ -78,10 +78,10 @@ LOG = logging.getLogger(Path(__file__).stem)
 
 # ── Variable shortNames ───────────────────────────────────────────────────────
 
-HEIGHT_NAME = "swh"
-DIR_NAME = "dirpw"
-PERIOD_NAME = "perpw"
-LEVEL_NAME = "zos"
+_HEIGHT_NAME = "swh"
+_DIR_NAME = "dirpw"
+_PERIOD_NAME = "perpw"
+_LEVEL_NAME = "zos"
 
 # ── Binary format ────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ LEVEL_NAME = "zos"
 #   uint8: usable 0..254, sentinel = 255
 #   int8:  usable -127..127, sentinel = -128
 #   int16: usable -32767..32767, sentinel = -32768
-DTYPE_INFO: dict[str, dict[str, Any]] = {
+_DTYPE_INFO: dict[str, dict[str, Any]] = {
     "uint8": {"np": np.uint8, "lo": 0, "hi": 254, "sentinel": 255, "bytes": 1, "endian": "u1"},
     "int8": {"np": np.int8, "lo": -127, "hi": 127, "sentinel": -128, "bytes": 1, "endian": "i1"},
     "int16": {"np": np.int16, "lo": -32767, "hi": 32767, "sentinel": -32768, "bytes": 2, "endian": "<i2"},
@@ -106,7 +106,7 @@ DTYPE_INFO: dict[str, dict[str, Any]] = {
 #   wave_dir   : linear, 0–360 °  step 1/0.5 °  (2 °)
 #   wave_period: linear, 0–32 s   step 1/8 s    (0.125 s)
 #   water_level: linear, ±3.2 m   step 1/40 m   (2.5 cm)
-QUANT: dict[str, dict[str, Any]] = {
+_QUANT: dict[str, dict[str, Any]] = {
     "wave_height": {"dtype": "uint8", "scale": 256 / np.sqrt(8), "transform": "sqrt"},
     "wave_dir": {"dtype": "uint8", "scale": 0.5},
     "wave_period": {"dtype": "uint8", "scale": 8},
@@ -121,6 +121,7 @@ Msg = dict[str, Any]
 
 
 def list_variables(path: Path) -> None:
+    """Log every distinct variable in a GRIB2 file, for picking the `*_NAME` constants above."""
     grbs = pygrib.open(path)
     seen: dict[tuple[Any, ...], dict[str, Any]] = {}
     for grb in grbs:
@@ -134,19 +135,29 @@ def list_variables(path: Path) -> None:
         seen[key]["count"] += 1
     grbs.close()
 
+    # One record, so the table isn't broken up by a log prefix per line.
+    lines = [f"Found {len(seen)} unique variable(s) in {path.name}:"]
+    for (short, name, ltype, level), info in seen.items():
+        lines.append(
+            f"  shortName={short!r:15s}  steps={info['count']:3d}  "
+            f"shape={info['shape']}  typeOfLevel={ltype}  level={level}"
+        )
+        lines.append(f"    name={name!r}")
+    LOG.info("\n".join(lines))
+
 
 def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
     """Single-pass read; returns msgs for (height, dir, period, level), or None if not present."""
     targets: dict[str, list[Msg]] = {
-        HEIGHT_NAME.lower(): [],
-        DIR_NAME.lower(): [],
-        PERIOD_NAME.lower(): [],
-        LEVEL_NAME.lower(): [],
+        _HEIGHT_NAME: [],
+        _DIR_NAME: [],
+        _PERIOD_NAME: [],
+        _LEVEL_NAME: [],
     }
 
     grbs = pygrib.open(path)
     for grb in grbs:
-        sn = grb.shortName.lower()
+        sn = grb.shortName
         if sn not in targets:
             continue
 
@@ -169,7 +180,12 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
     def sort_or_none(msgs: list[Msg]) -> list[Msg] | None:
         return sorted(msgs, key=lambda m: m["validDate"]) if msgs else None
 
-    return tuple(sort_or_none(targets[k.lower()]) for k in (HEIGHT_NAME, DIR_NAME, PERIOD_NAME, LEVEL_NAME))
+    return (
+        sort_or_none(targets[_HEIGHT_NAME]),
+        sort_or_none(targets[_DIR_NAME]),
+        sort_or_none(targets[_PERIOD_NAME]),
+        sort_or_none(targets[_LEVEL_NAME]),
+    )
 
 
 def extract(
@@ -215,7 +231,7 @@ def quantize(
     transform: str = "linear",
 ) -> npt.NDArray[Any]:
     """[nt,ny,nx] → typed [ny*nx, nt]; NaN/Inf → sentinel, out-of-range clipped."""
-    info = DTYPE_INFO[dtype]
+    info = _DTYPE_INFO[dtype]
     nt, ny, nx = arr.shape
     # Cell-major, time-minor: result[y*nx + x, t] = arr[t, y, x]
     flat = np.transpose(arr, (1, 2, 0)).reshape(ny * nx, nt)
@@ -253,10 +269,10 @@ def write_binary(
         "variables": [
             {
                 "name": name,
-                "dtype": QUANT[name]["dtype"],
-                "scale": QUANT[name]["scale"],
-                "sentinel": DTYPE_INFO[QUANT[name]["dtype"]]["sentinel"],
-                "transform": QUANT[name].get("transform", "linear"),
+                "dtype": _QUANT[name]["dtype"],
+                "scale": _QUANT[name]["scale"],
+                "sentinel": _DTYPE_INFO[_QUANT[name]["dtype"]]["sentinel"],
+                "transform": _QUANT[name].get("transform", "linear"),
             }
             for name, _ in arrays
         ],
@@ -271,7 +287,7 @@ def write_binary(
         f.write(struct.pack("<I", len(header_bytes)))
         f.write(header_bytes)
         for name, arr in arrays:
-            endian = DTYPE_INFO[QUANT[name]["dtype"]]["endian"]
+            endian = _DTYPE_INFO[_QUANT[name]["dtype"]]["endian"]
             f.write(arr.astype(endian, copy=False).tobytes())
 
 
@@ -299,13 +315,10 @@ def main(
     Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.
 
     Args:
-        path: Input .grib2 file
-        list_only: List available variables and exit
-        out_dir: Output directory to save .bin.gz file
+        path: Input .grib2 file.
+        list_only: List available variables and exit.
+        out_dir: Output directory to save .bin.gz file.
     """
-
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
 
     if list_only:
         list_variables(path)
@@ -314,7 +327,9 @@ def main(
     msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
-        raise ValueError(f"Wave height variable '{HEIGHT_NAME}' not found. Run --list-only to see available variables.")
+        raise ValueError(
+            f"Wave height variable '{_HEIGHT_NAME}' not found. Run --list-only to see available variables."
+        )
 
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     nt, ny, nx = arr_h.shape
@@ -337,27 +352,27 @@ def main(
     }
 
     def empty(name: str) -> npt.NDArray[Any]:
-        info = DTYPE_INFO[QUANT[name]["dtype"]]
+        info = _DTYPE_INFO[_QUANT[name]["dtype"]]
         return np.full((ny * nx, nt), info["sentinel"], dtype=info["np"])
 
     arrays: list[tuple[str, npt.NDArray[Any]]] = []
-    arrays.append(("wave_height", quantize(arr_h, **QUANT["wave_height"])))
+    arrays.append(("wave_height", quantize(arr_h, **_QUANT["wave_height"])))
 
     if msgs_d:
         _, _, _, arr_d, _ = extract(msgs_d)
-        arrays.append(("wave_dir", quantize(arr_d, **QUANT["wave_dir"])))
+        arrays.append(("wave_dir", quantize(arr_d, **_QUANT["wave_dir"])))
     else:
         arrays.append(("wave_dir", empty("wave_dir")))
 
     if msgs_p:
         _, _, _, arr_p, _ = extract(msgs_p)
-        arrays.append(("wave_period", quantize(arr_p, **QUANT["wave_period"])))
+        arrays.append(("wave_period", quantize(arr_p, **_QUANT["wave_period"])))
     else:
         arrays.append(("wave_period", empty("wave_period")))
 
     if msgs_l:
         _, _, _, arr_l, _ = extract(msgs_l)
-        arrays.append(("water_level", quantize(arr_l, **QUANT["water_level"])))
+        arrays.append(("water_level", quantize(arr_l, **_QUANT["water_level"])))
     else:
         arrays.append(("water_level", empty("water_level")))
 
