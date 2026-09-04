@@ -290,10 +290,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    from wavey2.logging import setup_logging
 
+    setup_logging()
     main()
