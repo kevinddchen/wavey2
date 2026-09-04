@@ -11,9 +11,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]",
     "mypy",
     "ruff",
     "types-requests",
+]
+archive = [
+    "boto3",
 ]
 
 [tool.mypy]
