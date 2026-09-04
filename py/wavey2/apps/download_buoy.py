@@ -173,9 +173,9 @@ def main(
     Download NDBC buoy observations as JSON for the dive conditions viewer.
 
     Args:
-        buoy_id: NDBC station id
-        out_dir: Output directory to save the .json file
-        lookback_days: Keep observations from the last N days
+        buoy_id: NDBC station id.
+        out_dir: Output directory to save the .json file.
+        lookback_days: Keep observations from the last N days.
     """
 
     download_buoy(
