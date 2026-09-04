@@ -285,12 +285,6 @@ def _out_filename(input_path: Path) -> str:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
     ap = argparse.ArgumentParser(
         description="Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -376,4 +370,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from wavey2.logging import setup_logging
+
+    setup_logging()
     main()

@@ -210,12 +210,6 @@ def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(levelname)s] [%(asctime)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
     ap = argparse.ArgumentParser(
         description="Sync downloaded NWPS GRIB2 files to S3.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -296,4 +290,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from wavey2.logging import setup_logging
+
+    setup_logging()
     main()
