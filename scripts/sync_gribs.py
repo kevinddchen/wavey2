@@ -11,16 +11,21 @@ directory and not yet in the bucket.
 Objects are keyed by run time, so a month can be listed under one prefix and the
 whole archive sorts chronologically:
 
-    <prefix>/YYYY/MM/mtr_nwps_CG3_YYYYMMDD_HH00.grib2
+    <prefix>/YYYY/MM/mtr_nwps_CG3_YYYYMMDD_HH00.grib2.gz
+
+Files are gzipped before upload. GRIB2's own packing leaves plenty of redundancy,
+so this takes a run from ~28 MB to ~11.5 MB — a bit under half the storage bill,
+losslessly, for a fraction of a second of CPU.
 
 Uploads set S3's native SHA-256 checksum (so a corrupted transfer is rejected
-rather than stored) and repeat the digest in user metadata as `x-amz-meta-sha256`,
-so the archive can be verified years later — by which point re-downloading from
-NOAA is impossible. Files are also checked for GRIB2 framing before upload, so a
-truncated download does not become a permanent bad record.
+rather than stored) and record two digests in user metadata: `x-amz-meta-sha256`
+for the stored gzip object, and `x-amz-meta-sha256-uncompressed` for the GRIB2
+inside it, which is what proves the data itself survived. Files are also checked
+for GRIB2 framing before upload, so a truncated download does not become a
+permanent bad record.
 
-The bucket holds nothing but the GRIB2 files themselves; which runs are archived
-is whatever a listing of the prefix says it is.
+The bucket holds nothing but the compressed GRIB2 files themselves; which runs are
+archived is whatever a listing of the prefix says it is.
 
 Because every invocation re-checks the whole local directory against the bucket,
 and the deploy workflow refreshes that directory from NOAA's full retention
@@ -38,9 +43,13 @@ Quick start
 """
 
 import argparse
+import gzip
 import hashlib
 import logging
+import os
 import re
+import shutil
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -53,8 +62,13 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger(Path(__file__).stem)
 
-# Filenames NOAA serves, e.g. "mtr_nwps_CG3_20260831_1200.grib2".
-_GRIB_RE = re.compile(r"^mtr_nwps_CG3_(\d{4})(\d{2})(\d{2})_(\d{4})\.grib2$")
+# Filenames NOAA serves, e.g. "mtr_nwps_CG3_20260831_1200.grib2". The optional
+# ".gz" lets this match archived object keys too, which are gzipped.
+_GRIB_RE = re.compile(r"^mtr_nwps_CG3_(\d{4})(\d{2})(\d{2})_(\d{4})\.grib2(?:\.gz)?$")
+
+# GRIB2 packing is not itself compressed, so gzip still takes roughly 28 MB down
+# to 11.5 MB. Level 9 buys another 0.2% for 3x the CPU, so the default is fine.
+_GZIP_LEVEL = 6
 
 # Every GRIB2 message starts with "GRIB" and ends with "7777"; a file that fails
 # this was truncated mid-download and must not be archived as if it were good.
@@ -84,9 +98,9 @@ def parse_filename(filename: str) -> tuple[str, str, str]:
 
 
 def object_key(prefix: str, filename: str) -> str:
-    """Build the S3 key for a GRIB2 file: "<prefix>/YYYY/MM/<filename>"."""
+    """Build the S3 key for a GRIB2 file: "<prefix>/YYYY/MM/<filename>.gz"."""
     _, yyyy, mm = parse_filename(filename)
-    return f"{prefix}/{yyyy}/{mm}/{filename}"
+    return f"{prefix}/{yyyy}/{mm}/{filename}.gz"
 
 
 def check_grib2(path: Path) -> None:
@@ -141,38 +155,58 @@ def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
     return archived
 
 
-def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> str:
+def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]:
     """
-    Upload one GRIB2 file, with checksums for later verification.
+    Gzip one GRIB2 file and upload it, with checksums for later verification.
+
+    The gzip stream is written with no embedded filename and a zero mtime, so
+    compressing the same GRIB2 file twice gives byte-identical output — a re-upload
+    can be recognised as a no-op rather than looking like new data.
 
     Args:
         s3: S3 client.
-        path: Local GRIB2 file.
+        path: Local (uncompressed) GRIB2 file.
         bucket: Bucket name.
-        key: Destination key.
+        key: Destination key, ending in ".gz".
 
     Returns:
-        The file's SHA-256 hex digest.
+        Tuple of (SHA-256 hex digest of the uncompressed GRIB2, compressed size
+        in bytes).
 
     Raises:
         ClientError: If the upload is rejected (including a checksum mismatch).
     """
 
     with open(path, "rb") as f:
-        digest = hashlib.file_digest(f, "sha256").hexdigest()
-        f.seek(0)
+        raw_digest = hashlib.file_digest(f, "sha256").hexdigest()
+
+    with tempfile.NamedTemporaryFile(suffix=".gz") as tmp:
+        with open(path, "rb") as src:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=tmp, compresslevel=_GZIP_LEVEL, mtime=0) as gz:
+                shutil.copyfileobj(src, gz)
+        tmp.flush()
+        size = os.fstat(tmp.fileno()).st_size
+
+        tmp.seek(0)
+        digest = hashlib.file_digest(tmp, "sha256").hexdigest()
+
+        tmp.seek(0)
         s3.put_object(
             Bucket=bucket,
             Key=key,
-            Body=f,
-            ContentType="application/octet-stream",
+            Body=tmp,
+            ContentType="application/gzip",
             ChecksumAlgorithm="SHA256",
             Metadata={
+                # `sha256` is of the stored (compressed) object; the uncompressed
+                # digest is what proves the GRIB2 itself survived the round trip,
+                # independently of how it was compressed.
                 "sha256": digest,
+                "sha256-uncompressed": raw_digest,
                 "archived-at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             },
         )
-    return digest
+    return raw_digest, size
 
 
 def main() -> None:
@@ -241,14 +275,17 @@ def main() -> None:
         key = object_key(prefix, path.name)
         try:
             check_grib2(path)
-            digest = upload(s3, path, args.bucket, key)
+            digest, size = upload(s3, path, args.bucket, key)
         except (ValueError, ClientError, BotoCoreError, OSError) as e:
             LOG.warning(f"Failed to sync '{path.name}': {e}")
             failures.append(path.name)
             continue
 
-        size = path.stat().st_size
-        LOG.info(f"Synced '{path.name}' to 's3://{args.bucket}/{key}' ({size / 1e6:.1f} MB, sha256 {digest[:12]}…)")
+        raw_size = path.stat().st_size
+        LOG.info(
+            f"Synced '{path.name}' to 's3://{args.bucket}/{key}' "
+            f"({raw_size / 1e6:.1f} -> {size / 1e6:.1f} MB gzipped, {size / raw_size:.0%}; sha256 {digest[:12]}…)"
+        )
         uploaded += 1
 
     LOG.info(f"Synced {uploaded} run(s), {len(failures)} failure(s)")
