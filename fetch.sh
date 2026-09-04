@@ -12,7 +12,7 @@ rm -rf "$DATA" "$GRIBS"
 mkdir -p "$DATA" "$GRIBS"
 uv run -m wavey2.apps.download_grib --out-dir "$GRIBS"
 for f in "$GRIBS"/*.grib2; do
-    uv run -m wavey2.apps.grib2bin "$f" --out-dir "$DATA" || echo "WARNING: failed to convert $f"
+    uv run -m wavey2.apps.grib2bin "$f" --out-dir "$DATA"
 done
 for id in 46236 46239; do
     uv run -m wavey2.apps.download_buoy "$id" --out-dir "$DATA" || echo "WARNING: buoy $id fetch failed"
