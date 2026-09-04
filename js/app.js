@@ -303,7 +303,7 @@ async function loadData(forecastId) {
 
 // Fetch + decode one buoy's observation file, returning `{ ...entry, ...columnar
 // data }` (parallel `times` / `wave_height` / `wave_period` / `wave_dir` arrays;
-// see scripts/download_buoy.py) prepared by `initBuoy`. Like switching forecast
+// see wavey2.apps.download_buoy) prepared by `initBuoy`. Like switching forecast
 // runs, this is lazy — the file is only fetched when the buoy is selected.
 // Throws if the file is missing or malformed.
 async function fetchBuoy(entry) {
@@ -344,7 +344,7 @@ function prefetchRuns(forecasts, currentId, buoys) {
 }
 
 // Binary format: [u32 LE header_len][JSON header][typed LE arrays...]
-// See scripts/grib2bin.py for the writer.
+// See wavey2.apps.grib2bin for the writer.
 const DTYPE_VIEW = {
     uint8: { ctor: Uint8Array, bytes: 1 },
     int8: { ctor: Int8Array, bytes: 1 },
@@ -442,12 +442,12 @@ function initData(data) {
 // to the display unit and rotate `wave_dir` +180° (the buoy reports the direction
 // waves come *from*; the charts show the direction waves travel *toward*). Missing
 // values stay null. `wave_period` needs no transform. The columns are parallel
-// arrays aligned to `times`, oldest-first (see scripts/download_buoy.py).
+// arrays aligned to `times`, oldest-first (see wavey2.apps.download_buoy).
 function initBuoy(buoy) {
     buoy.wave_height = buoy.wave_height.map((v) => (v == null ? null : v * UNIT_SCALE));
     buoy.wave_dir = buoy.wave_dir.map((v) => (v == null ? null : (v + 180) % 360));
     // Index each observation by its epoch-ms timestamp. Both the buoy and the
-    // forecast sit on the same hourly grid (see scripts/download_buoy.py), so
+    // forecast sit on the same hourly grid (see wavey2.apps.download_buoy), so
     // `alignBuoy` can match forecast steps to observations by exact timestamp.
     buoy.indexByTime = new Map(buoy.times.map((t, i) => [Date.parse(t), i]));
 }
