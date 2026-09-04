@@ -15,6 +15,6 @@ for f in "$GRIBS"/*.grib2; do
     uv run -m wavey2.apps.grib2bin "$f" --out-dir "$DATA"
 done
 for id in 46236 46239; do
-    uv run -m wavey2.apps.download_buoy "$id" --out-dir "$DATA" || echo "WARNING: buoy $id fetch failed"
+    uv run -m wavey2.apps.download_buoy "$id" --out-dir "$DATA"
 done
 uv run -m wavey2.apps.build_index --data-dir "$DATA"
