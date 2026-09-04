@@ -38,13 +38,15 @@ Quick start
   uv run -m wavey2.apps.build_coastline  # fetch, then write js/coastline.js
 """
 
-import argparse
 import logging
 import math
 from collections import defaultdict
 from pathlib import Path
 
 import requests
+import tyro
+
+from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
 
@@ -229,23 +231,19 @@ def build_coastline(out_path: Path) -> None:
     LOG.info(f"Wrote '{out_path}' ({len(path) / 1024:.0f} KiB path)")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Build the coastline water mask the wave heatmap is clipped to.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # fmt: off
-    ap.add_argument(
-        "--out", "-o", type=Path, default=Path("./js/coastline.js"), help="Output .js file to write",
-    )
-    # fmt: on
-    args = ap.parse_args()
+def main(
+    out_path: Path = Path("./js/coastline.js"),
+) -> None:
+    """
+    Build the coastline water mask the wave heatmap is clipped to.
 
-    build_coastline(out_path=args.out)
+    Args:
+        out_path: Output .js file to write
+    """
+
+    build_coastline(out_path=out_path)
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)

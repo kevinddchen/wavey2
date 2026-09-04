@@ -54,12 +54,11 @@ The reader is `decodeBinary` in `js/app.js`.
 
 Quick start
 -----------
-  python -m wavey2.apps.grib2bin mtr_nwps_CG3_20260430_1200.grib2 --list
+  python -m wavey2.apps.grib2bin mtr_nwps_CG3_20260430_1200.grib2 --list-only
   python -m wavey2.apps.grib2bin mtr_nwps_CG3_20260430_1200.grib2
 
 """
 
-import argparse
 import gzip
 import json
 import logging
@@ -71,6 +70,9 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pygrib
+import tyro
+
+from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
 
@@ -284,36 +286,32 @@ def _out_filename(input_path: Path) -> str:
     return f"waves_{m.group(1)}.bin.gz"
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # fmt: off
-    ap.add_argument(
-        "input", type=Path, help="Input .grib2 file",
-    )
-    ap.add_argument(
-        "--list", "-l", action="store_true", help="List available variables and exit",
-    )
-    ap.add_argument(
-        "--out-dir", "-o", type=Path, default=Path("./data/"), help="Output directory to save .bin.gz file",
-    )
-    # fmt: on
-    args = ap.parse_args()
+def main(
+    path: Path,
+    /,
+    list_only: bool = False,
+    out_dir: Path = Path("./data/"),
+) -> None:
+    """
+    Convert NWPS GRIB2 → waves.bin.gz for the dive conditions viewer.
 
-    path: Path = args.input
+    Args:
+        path: Input .grib2 file
+        list_only: List available variables and exit
+        out_dir: Output directory to save .bin.gz file
+    """
+
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    if args.list:
+    if list_only:
         list_variables(path)
         return
 
     msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
-        raise ValueError(f"Wave height variable '{HEIGHT_NAME}' not found. Run --list to see available variables.")
+        raise ValueError(f"Wave height variable '{HEIGHT_NAME}' not found. Run --list-only to see available variables.")
 
     times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
     nt, ny, nx = arr_h.shape
@@ -360,7 +358,6 @@ def main() -> None:
     else:
         arrays.append(("water_level", empty("water_level")))
 
-    out_dir: Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / _out_filename(path)
     write_binary(out_path, metadata, arrays)
@@ -370,7 +367,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)

@@ -1,4 +1,3 @@
-import argparse
 import logging
 import os
 import re
@@ -6,7 +5,10 @@ from pathlib import Path
 from typing import Iterator
 
 import requests
+import tyro
 from bs4 import BeautifulSoup
+
+from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
 
@@ -243,31 +245,20 @@ def check_grib2(path: Path) -> None:
     raise RuntimeError(f"'{path.name}' is not a GRIB2 file (starts {head!r}, ends {tail!r})")
 
 
-def main() -> None:
-    # =========================================================================
+def main(
+    download_all: bool = True,
+    out_dir: Path = Path("./gribs/"),
+) -> None:
+    """
+    Download Monterey Bay NWPS GRIB2 forecasts.
 
-    ap = argparse.ArgumentParser(
-        description="Download Monterey Bay NWPS GRIB2 forecasts.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    ap.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        help="Download every available forecast",
-    )
-    ap.add_argument(
-        "--out-dir",
-        "-o",
-        type=Path,
-        default=Path("./gribs/"),
-        help="Output directory to save the .grib2 files",
-    )
-    args = ap.parse_args()
+    Args:
+        download_all: Download every available forecast. Otherwise, downloads
+            just the most recent one.
+        out_dir: Output directory to save the .grib2 files.
+    """
 
-    # =========================================================================
-
-    if args.all:
+    if download_all:
         urls = get_all_available_forecasts()
         LOG.info(f"Found {len(urls)} forecast(s)")
     else:
@@ -277,7 +268,7 @@ def main() -> None:
     downloaded = 0
     for url in urls:
         try:
-            file_path = download_forecast(url, dir=args.out_dir)
+            file_path = download_forecast(url, dir=out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
             continue
@@ -290,7 +281,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    from wavey2.logging import setup_logging
-
     setup_logging()
-    main()
+    tyro.cli(main)

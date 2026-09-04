@@ -89,10 +89,8 @@ are documented for reference, or if you want to run them manually.
 ### Download GRIB2 files
 
 ```bash
-# the single most recent run:
-uv run -m wavey2.apps.download_grib
-# or every run still on the server:
-uv run -m wavey2.apps.download_grib -a
+uv run -m wavey2.apps.download_grib                     # every run still on the server
+uv run -m wavey2.apps.download_grib --no-download-all   # or just the most recent one
 ```
 
 ### Convert data to binary
@@ -109,7 +107,7 @@ e.g. `20260528_1200`, is parsed from the input filename).
 ### Download buoy observations
 
 ```bash
-uv run -m wavey2.apps.download_buoy -b 46236  # writes data/buoy_46236_<YYYYMMDD_HHMM>.json
+uv run -m wavey2.apps.download_buoy 46236  # writes data/buoy_46236_<YYYYMMDD_HHMM>.json
 ```
 
 ### Build the manifest
