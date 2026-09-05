@@ -83,46 +83,10 @@ observations, and build the manifest:
 ./fetch.sh
 ```
 
-After fetching, skip ahead to [Run web server](#run-web-server). The individual steps below
-are documented for reference, or if you want to run them manually.
-
-### Download GRIB2 files
-
-```bash
-uv run -m wavey2.apps.download_grib                     # every run still on the server
-uv run -m wavey2.apps.download_grib --no-download-all   # or just the most recent one
-```
-
-### Convert data to binary
-
-```bash
-for f in gribs/*.grib2; do
-    uv run -m wavey2.apps.grib2bin "$f"
-done
-```
-
-This creates one file per run named `data/waves_<run_id>.bin.gz` (the `<run_id>`,
-e.g. `20260528_1200`, is parsed from the input filename).
-
-### Download buoy observations
-
-```bash
-uv run -m wavey2.apps.download_buoy 46236  # writes data/buoy_46236_<YYYYMMDD_HHMM>.json
-```
-
-### Build the manifest
-
-After generating the wave files and any buoy files, build `data/index.json` (the
-manifest the website reads to discover both):
-
-```bash
-uv run -m wavey2.apps.build_index  # scans data/ for waves_*.bin.gz and buoy_*.json
-```
-
 ### Run web server
 
 ```bash
-uv run python -m http.server 8000 & open http://localhost:8000
+uv run --no-dev -m http.server 8000 & open http://localhost:8000
 ```
 
 A plain file server is required because the page uses `fetch()` to load `data/index.json` and the `data/*` data files, which browsers block over `file://` URLs.
@@ -135,7 +99,7 @@ That file is committed and `fetch.sh` does not rebuild it — coastlines don't m
 forecast grid's bounds change:
 
 ```bash
-uv run -m wavey2.apps.build_coastline  # queries the Overpass API, rewrites js/coastline.js
+uv run --no-dev -m wavey2.apps.build_coastline  # queries the Overpass API, rewrites js/coastline.js
 ```
 
 ## Hosting on GitHub Pages
