@@ -37,7 +37,7 @@ import logging
 import re
 import struct
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -90,6 +90,18 @@ _QUANT: dict[str, dict[str, Any]] = {
 
 Msg = dict[str, Any]
 
+
+class Loaded(NamedTuple):
+    """Target messages plus the lat/lon grid they all share."""
+
+    lats: npt.NDArray[Any] | None
+    lons: npt.NDArray[Any] | None
+    height: list[Msg] | None
+    dir: list[Msg] | None
+    period: list[Msg] | None
+    level: list[Msg] | None
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -119,14 +131,18 @@ def list_variables(path: Path) -> None:
     LOG.info("\n".join(lines))
 
 
-def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
-    """Single-pass read; returns msgs for (height, dir, period, level), or None if not present."""
+def load_all_messages(path: Path) -> Loaded:
+    """Single-pass read; per-variable msgs are None if the variable isn't present."""
     targets: dict[str, list[Msg]] = {
         _HEIGHT_NAME: [],
         _DIR_NAME: [],
         _PERIOD_NAME: [],
         _LEVEL_NAME: [],
     }
+    # Every message is on the same grid, and `latlons()` is expensive (it rebuilds
+    # the projection and meshgrids), so read it from the first match only.
+    lats: npt.NDArray[Any] | None = None
+    lons: npt.NDArray[Any] | None = None
 
     grbs = pygrib.open(path)  # ty: ignore[unresolved-attribute]
     for grb in grbs:
@@ -137,15 +153,14 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
         vals = grb.values
         if hasattr(vals, "filled"):
             vals = vals.filled(np.nan)
-        lats, lons = grb.latlons()
+        if lats is None:
+            lats, lons = grb.latlons()
         targets[sn].append(
             {
                 "shortName": grb.shortName,
                 "validDate": grb.validDate,
                 "analDate": getattr(grb, "analDate", None),
                 "values": vals,
-                "lats": lats,
-                "lons": lons,
             }
         )
     grbs.close()
@@ -153,7 +168,9 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
     def sort_or_none(msgs: list[Msg]) -> list[Msg] | None:
         return sorted(msgs, key=lambda m: m["validDate"]) if msgs else None
 
-    return (
+    return Loaded(
+        lats,
+        lons,
         sort_or_none(targets[_HEIGHT_NAME]),
         sort_or_none(targets[_DIR_NAME]),
         sort_or_none(targets[_PERIOD_NAME]),
@@ -163,11 +180,10 @@ def load_all_messages(path: Path) -> tuple[list[Msg] | None, ...]:
 
 def extract(
     msgs: list[Msg],
+    lats2d: npt.NDArray[Any],
+    lons2d: npt.NDArray[Any],
 ) -> tuple[list[str], npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any], str | None]:
     """Return (times_iso, lat_1d, lon_1d, values[nt,ny,nx], ref_time_iso)."""
-    lats2d = msgs[0]["lats"]
-    lons2d = msgs[0]["lons"]
-
     data = np.stack([m["values"] for m in msgs], axis=0)  # [nt, ny, nx]
 
     times_iso = [m["validDate"].strftime("%Y-%m-%dT%H:%M:%SZ") for m in msgs]
@@ -296,14 +312,16 @@ def main(
         list_variables(path)
         return
 
-    msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
+    lats2d, lons2d, msgs_h, msgs_d, msgs_p, msgs_l = load_all_messages(path)
 
     if msgs_h is None:
         raise ValueError(
             f"Wave height variable '{_HEIGHT_NAME}' not found. Run --list-only to see available variables."
         )
+    # Set alongside the first matched message, so non-None whenever `msgs_h` is.
+    assert lats2d is not None and lons2d is not None
 
-    times_iso, lats, lons, arr_h, ref_time = extract(msgs_h)
+    times_iso, lats, lons, arr_h, ref_time = extract(msgs_h, lats2d, lons2d)
     nt, ny, nx = arr_h.shape
 
     grid = Grid(
@@ -331,19 +349,19 @@ def main(
     arrays.append(("wave_height", quantize(arr_h, **_QUANT["wave_height"])))
 
     if msgs_d:
-        _, _, _, arr_d, _ = extract(msgs_d)
+        _, _, _, arr_d, _ = extract(msgs_d, lats2d, lons2d)
         arrays.append(("wave_dir", quantize(arr_d, **_QUANT["wave_dir"])))
     else:
         arrays.append(("wave_dir", empty("wave_dir")))
 
     if msgs_p:
-        _, _, _, arr_p, _ = extract(msgs_p)
+        _, _, _, arr_p, _ = extract(msgs_p, lats2d, lons2d)
         arrays.append(("wave_period", quantize(arr_p, **_QUANT["wave_period"])))
     else:
         arrays.append(("wave_period", empty("wave_period")))
 
     if msgs_l:
-        _, _, _, arr_l, _ = extract(msgs_l)
+        _, _, _, arr_l, _ = extract(msgs_l, lats2d, lons2d)
         arrays.append(("water_level", quantize(arr_l, **_QUANT["water_level"])))
     else:
         arrays.append(("water_level", empty("water_level")))
