@@ -134,3 +134,31 @@ uv run ruff format --check
 npm run eslint
 npm run prettier
 ```
+
+### Update dependencies
+
+Python
+
+```bash
+uv lock --upgrade --dry-run   # preview what would change
+uv lock --upgrade             # rewrite uv.lock
+uv sync                       # install the new versions into .venv
+```
+
+Javascript
+
+```bash
+npm update --dry-run   # preview what would change
+npm update             # upgrade and rewrite package-lock.json
+```
+
+### Update CDN libraries
+
+Leaflet and Chart.js are not npm dependencies — they load at runtime from jsDelivr, pinned by
+version in `index.html`:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+```
