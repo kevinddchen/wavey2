@@ -155,10 +155,28 @@ npm update             # upgrade and rewrite package-lock.json
 ### Update CDN libraries
 
 Leaflet and Chart.js are not npm dependencies — they load at runtime from jsDelivr, pinned by
-version in `index.html`:
+version in `index.html` and locked to a [Subresource Integrity](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) hash of the exact bytes:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
-<script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
+    crossorigin="anonymous"
+/>
 ```
+
+A version bump is also a hash bump, so regenerate all three whenever you change a version:
+
+```bash
+for url in \
+    https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css \
+    https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js \
+    https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js; do
+    echo "$url"
+    echo "  sha384-$(curl -sfL "$url" | openssl dgst -sha384 -binary | openssl base64 -A)"
+done
+```
+
+Paste each `sha384-…` line into the matching tag in `index.html`, then load the page and confirm the
+map and charts still render.
