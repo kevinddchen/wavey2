@@ -155,10 +155,49 @@ npm update             # upgrade and rewrite package-lock.json
 ### Update CDN libraries
 
 Leaflet and Chart.js are not npm dependencies — they load at runtime from jsDelivr, pinned by
-version in `index.html`:
+version in `index.html` and locked to a [Subresource Integrity][sri] hash of the exact bytes:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
-<script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
+    crossorigin="anonymous"
+/>
 ```
+
+The browser hashes what it downloads and refuses to run it unless the digest matches, so a
+compromised or impersonated CDN can't substitute its own script. `crossorigin="anonymous"` is
+required for the check to run on a cross-origin request, and pins the request as credential-free.
+
+[sri]: https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity
+
+**A version bump is also a hash bump.** A stale `integrity` doesn't degrade — the browser drops the
+file entirely and the page breaks, so regenerate all three whenever you change a version:
+
+```bash
+for url in \
+    https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css \
+    https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js \
+    https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js; do
+    echo "$url"
+    echo "  sha384-$(curl -sfL "$url" | openssl dgst -sha384 -binary | openssl base64 -A)"
+done
+```
+
+Paste each `sha384-…` line into the matching tag in `index.html`, then load the page and confirm the
+map and charts still render — a mismatch is only visible at runtime (the console reports it; there
+are no build-time checks to catch it). Trusting the CDN to tell you what its own bytes hash to is
+circular, so verify against the publisher instead:
+
+```bash
+npm pack leaflet@1.9.4                          # or chart.js@4.5.1
+tar xzf leaflet-1.9.4.tgz
+openssl dgst -sha384 -binary package/dist/leaflet.js | openssl base64 -A
+```
+
+Use only paths that exist in that tarball. jsDelivr synthesizes a `*.min.*` URL for any file whose
+package doesn't ship one, and those bytes are the CDN's own build rather than the publisher's —
+`leaflet.min.js` is one of them (`dist/leaflet.js` is already the minified bundle; `leaflet-src.js`
+is the readable one), which is why the tags above point at `leaflet.css` / `leaflet.js`. Chart.js
+does publish `dist/chart.umd.min.js`, so that one is used as-is.
