@@ -225,6 +225,9 @@ def check_grib2(path: Path) -> None:
     Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
     ends with "7777".
 
+    Logs a preview of the contents when the check fails, so a bad download can be
+    diagnosed from the logs alone.
+
     Args:
         path: File to check.
 
@@ -242,7 +245,30 @@ def check_grib2(path: Path) -> None:
             return
     else:
         head = tail = b""
-    raise RuntimeError(f"'{path.name}' is not a GRIB2 file (starts {head!r}, ends {tail!r})")
+
+    LOG.error(f"'{path.name}' is not a GRIB2 file ({size} bytes). Contents:\n{_preview(path)}")
+    raise RuntimeError(f"'{path.name}' is not a GRIB2 file")
+
+
+def _preview(path: Path, preview_bytes: int = 2048) -> str:
+    """
+    Read the start of a file as text, for logging what a bad download contains.
+
+    Args:
+        path: File to read.
+        preview_bytes: How much of a file that failed the GRIB2 check to log.
+
+    Returns:
+        The first `preview_bytes` bytes decoded as UTF-8 — bytes that are not
+        valid UTF-8 are escaped rather than dropped, so binary junk is still
+        readable — with a trailing "..." if the file is longer than that.
+    """
+
+    with open(path, "rb") as f:
+        data = f.read(preview_bytes + 1)
+
+    text = data[:preview_bytes].decode("utf-8", errors="backslashreplace")
+    return f"{text}..." if len(data) > preview_bytes else text
 
 
 def main(
