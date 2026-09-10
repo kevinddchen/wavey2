@@ -16,8 +16,6 @@ _BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod"
 _MTR = "mtr"
 _CG3 = "CG3"
 
-_CHUNK_SIZE = 8192
-
 # Seconds to wait for a connection / between received chunks before giving up.
 _TIMEOUT_SECS = 30
 
@@ -187,13 +185,14 @@ def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
     return hrefs
 
 
-def download_forecast(url: str, dir: Path) -> Path:
+def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) -> Path:
     """
     Download NWFS forecast data to disk.
 
     Args:
         url: URL to the GRIB file.
         dir: Directory to save the file in.
+        chunk_size: Download chunk size, in bytes.
 
     Returns:
         Path to the GRIB file.
@@ -212,7 +211,7 @@ def download_forecast(url: str, dir: Path) -> Path:
 
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as file:
-        for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
+        for chunk in r.iter_content(chunk_size=chunk_size):
             file.write(chunk)
 
     size_mb = file_path.stat().st_size / 1e6
@@ -224,6 +223,9 @@ def check_grib2(path: Path) -> None:
     """
     Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
     ends with "7777".
+
+    Logs a preview of the contents when the check fails, so a bad download can be
+    diagnosed from the logs alone.
 
     Args:
         path: File to check.
@@ -240,9 +242,30 @@ def check_grib2(path: Path) -> None:
             tail = f.read(len(_GRIB_END))
         if head == _GRIB_MAGIC and tail == _GRIB_END:
             return
-    else:
-        head = tail = b""
-    raise RuntimeError(f"'{path.name}' is not a GRIB2 file (starts {head!r}, ends {tail!r})")
+
+    LOG.error(f"'{path.name}' is not a GRIB2 file ({size} bytes). Contents:\n{_preview(path)}")
+    raise RuntimeError(f"'{path.name}' is not a GRIB2 file")
+
+
+def _preview(path: Path, preview_bytes: int = 2 * 1024) -> str:
+    """
+    Read the start of a file as text, for logging what a bad download contains.
+
+    Args:
+        path: File to read.
+        preview_bytes: How much of a file that failed the GRIB2 check to log.
+
+    Returns:
+        The first `preview_bytes` bytes decoded as UTF-8 — bytes that are not
+        valid UTF-8 are escaped rather than dropped, so binary junk is still
+        readable — with a trailing "..." if the file is longer than that.
+    """
+
+    with open(path, "rb") as f:
+        data = f.read(preview_bytes + 1)
+
+    text = data[:preview_bytes].decode("utf-8", errors="backslashreplace")
+    return f"{text}..." if len(data) > preview_bytes else text
 
 
 def main(
