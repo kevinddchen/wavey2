@@ -18,7 +18,7 @@ Setup:
 
 ```bash
 uv venv && uv sync   # Python (>=3.14); `uv sync --no-dev` if you only need to fetch data
-npm install          # JS lint/format tooling only — no runtime deps, no bundler
+npm ci               # JS lint/format tooling only — no runtime deps, no bundler
 ```
 
 Checks (mirrors `.github/workflows/check.yml` — there is no test suite):

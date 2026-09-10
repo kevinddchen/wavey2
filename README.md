@@ -117,7 +117,7 @@ The `.github/workflows/deploy.yml` workflow handles the build and deploy. It run
 ```bash
 uv venv
 uv sync
-npm install
+npm ci
 ```
 
 ### Python checks
@@ -149,7 +149,8 @@ Javascript
 
 ```bash
 npm update --dry-run   # preview what would change
-npm update             # upgrade and rewrite package-lock.json
+npm update             # rewrite package-lock.json
+npm ci                 # install the new versions
 ```
 
 ### Update CDN libraries
