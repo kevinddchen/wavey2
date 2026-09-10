@@ -242,8 +242,6 @@ def check_grib2(path: Path) -> None:
             tail = f.read(len(_GRIB_END))
         if head == _GRIB_MAGIC and tail == _GRIB_END:
             return
-    else:
-        head = tail = b""
 
     LOG.error(f"'{path.name}' is not a GRIB2 file ({size} bytes). Contents:\n{_preview(path)}")
     raise RuntimeError(f"'{path.name}' is not a GRIB2 file")
