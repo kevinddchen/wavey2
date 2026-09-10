@@ -16,8 +16,6 @@ _BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod"
 _MTR = "mtr"
 _CG3 = "CG3"
 
-_CHUNK_SIZE = 8192
-
 # Seconds to wait for a connection / between received chunks before giving up.
 _TIMEOUT_SECS = 30
 
@@ -187,13 +185,14 @@ def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
     return hrefs
 
 
-def download_forecast(url: str, dir: Path) -> Path:
+def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) -> Path:
     """
     Download NWFS forecast data to disk.
 
     Args:
         url: URL to the GRIB file.
         dir: Directory to save the file in.
+        chunk_size: Download chunk size, in bytes.
 
     Returns:
         Path to the GRIB file.
@@ -212,7 +211,7 @@ def download_forecast(url: str, dir: Path) -> Path:
 
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as file:
-        for chunk in r.iter_content(chunk_size=_CHUNK_SIZE):
+        for chunk in r.iter_content(chunk_size=chunk_size):
             file.write(chunk)
 
     size_mb = file_path.stat().st_size / 1e6
@@ -250,7 +249,7 @@ def check_grib2(path: Path) -> None:
     raise RuntimeError(f"'{path.name}' is not a GRIB2 file")
 
 
-def _preview(path: Path, preview_bytes: int = 2048) -> str:
+def _preview(path: Path, preview_bytes: int = 2 * 1024) -> str:
     """
     Read the start of a file as text, for logging what a bad download contains.
 
