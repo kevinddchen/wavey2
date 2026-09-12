@@ -14,7 +14,7 @@ def check_grib2(path: Path) -> bool:
         path: File to check.
 
     Returns:
-        Whether `path` is a GRIB2 file. 
+        Whether `path` is a GRIB2 file.
     """
 
     size = path.stat().st_size
