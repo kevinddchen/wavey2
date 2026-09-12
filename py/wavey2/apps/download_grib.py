@@ -8,6 +8,7 @@ import requests
 import tyro
 from bs4 import BeautifulSoup
 
+from wavey2.grib import check_grib2
 from wavey2.logging import setup_logging
 
 LOG = logging.getLogger(Path(__file__).stem)
@@ -18,10 +19,6 @@ _CG3 = "CG3"
 
 # Seconds to wait for a connection / between received chunks before giving up.
 _TIMEOUT_SECS = 30
-
-# Framing of a GRIB2 file: it starts with "GRIB" and ends with "7777".
-_GRIB_MAGIC = b"GRIB"
-_GRIB_END = b"7777"
 
 
 def get_most_recent_forecast() -> str:
@@ -219,34 +216,6 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     return file_path
 
 
-def check_grib2(path: Path) -> None:
-    """
-    Check that a file has GRIB2 framing: every GRIB2 file starts with "GRIB" and
-    ends with "7777".
-
-    Logs a preview of the contents when the check fails, so a bad download can be
-    diagnosed from the logs alone.
-
-    Args:
-        path: File to check.
-
-    Raises:
-        RuntimeError: If the file is not a GRIB2 file.
-    """
-
-    size = path.stat().st_size
-    if size >= len(_GRIB_MAGIC) + len(_GRIB_END):
-        with open(path, "rb") as f:
-            head = f.read(len(_GRIB_MAGIC))
-            f.seek(-len(_GRIB_END), os.SEEK_END)
-            tail = f.read(len(_GRIB_END))
-        if head == _GRIB_MAGIC and tail == _GRIB_END:
-            return
-
-    LOG.error(f"'{path.name}' is not a GRIB2 file ({size} bytes). Contents:\n{_preview(path)}")
-    raise RuntimeError(f"'{path.name}' is not a GRIB2 file")
-
-
 def _preview(path: Path, preview_bytes: int = 2 * 1024) -> str:
     """
     Read the start of a file as text, for logging what a bad download contains.
@@ -296,7 +265,13 @@ def main(
             LOG.warning(f"Failed to download '{url}': {e}")
             continue
 
-        check_grib2(file_path)
+        if not check_grib2(file_path):
+            LOG.error(
+                f"'{file_path.name}' is not a GRIB2 file ({file_path.stat().st_size} bytes). "
+                f"Contents:\n{_preview(file_path)}"
+            )
+            raise RuntimeError(f"'{file_path.name}' is not a GRIB2 file.")
+
         downloaded += 1
 
     if downloaded == 0:

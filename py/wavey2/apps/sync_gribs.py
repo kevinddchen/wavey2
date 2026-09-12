@@ -42,6 +42,8 @@ Quick start
   uv run --group archive -m wavey2.apps.sync_gribs --bucket my-bucket
 """
 
+from __future__ import annotations
+
 import gzip
 import hashlib
 import logging
@@ -55,8 +57,8 @@ from typing import TYPE_CHECKING
 
 import boto3
 import tyro
-from botocore.exceptions import BotoCoreError, ClientError
 
+from wavey2.grib import check_grib2
 from wavey2.logging import setup_logging
 
 if TYPE_CHECKING:
@@ -71,11 +73,6 @@ _GRIB_RE = re.compile(r"^mtr_nwps_CG3_(\d{4})(\d{2})(\d{2})_(\d{4})\.grib2(?:\.g
 # GRIB2 packing is not itself compressed, so gzip still takes roughly 28 MB down
 # to 11.5 MB. Level 9 buys another 0.2% for 3x the CPU, so the default is fine.
 _GZIP_LEVEL = 6
-
-# Every GRIB2 message starts with "GRIB" and ends with "7777"; a file that fails
-# this was truncated mid-download and must not be archived as if it were good.
-_GRIB_MAGIC = b"GRIB"
-_GRIB_END = b"7777"
 
 
 def parse_filename(filename: str) -> tuple[str, str, str]:
@@ -105,30 +102,7 @@ def object_key(prefix: str, filename: str) -> str:
     return f"{prefix}/{yyyy}/{mm}/{filename}.gz"
 
 
-def check_grib2(path: Path) -> None:
-    """
-    Check that a file is a complete GRIB2 file.
-
-    Args:
-        path: Local file to check.
-
-    Raises:
-        ValueError: If the GRIB2 framing is missing, i.e. the file is truncated
-            or is not a GRIB2 file at all.
-    """
-
-    size = path.stat().st_size
-    if size < len(_GRIB_MAGIC) + len(_GRIB_END):
-        raise ValueError(f"{path.name} is too small to be a GRIB2 file ({size} bytes)")
-    with open(path, "rb") as f:
-        head = f.read(len(_GRIB_MAGIC))
-        f.seek(-len(_GRIB_END), 2)
-        tail = f.read(len(_GRIB_END))
-    if head != _GRIB_MAGIC or tail != _GRIB_END:
-        raise ValueError(f"{path.name} is not a complete GRIB2 file (head {head!r}, tail {tail!r})")
-
-
-def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
+def list_archived(s3: S3Client, bucket: str, prefix: str) -> set[str]:
     """
     List the runs already in the bucket.
 
@@ -149,15 +123,17 @@ def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=f"{prefix}/"):
         for obj in page.get("Contents", []):
+            name = obj["Key"].rsplit("/", 1)[-1]
             try:
-                run_id, _, _ = parse_filename(obj["Key"].rsplit("/", 1)[-1])
+                run_id, _, _ = parse_filename(name)
             except ValueError:
+                LOG.warning(f"Cannot parse S3 key '{obj['Key']}'; skipping.")
                 continue
             archived.add(run_id)
     return archived
 
 
-def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]:
+def upload(s3: S3Client, path: Path, bucket: str, key: str) -> tuple[str, int]:
     """
     Gzip one GRIB2 file and upload it, with checksums for later verification.
 
@@ -237,15 +213,15 @@ def main(
     for path in sorted(grib_dir.glob("*.grib2")):
         try:
             run_id, _, _ = parse_filename(path.name)
-        except ValueError as e:
-            LOG.warning(f"Skipping {e}")
+        except ValueError:
+            LOG.warning(f"Cannot parse local file '{path}'; skipping.")
             continue
         local[run_id] = path
     if not local:
         raise FileNotFoundError(f"no mtr_nwps_CG3_<run_id>.grib2 files found in {grib_dir}")
     LOG.info(f"Found {len(local)} local run(s) in '{grib_dir}'")
 
-    s3: "S3Client" = boto3.client("s3", endpoint_url=endpoint_url)
+    s3: S3Client = boto3.client("s3", endpoint_url=endpoint_url)
     archived = list_archived(s3, bucket, prefix)
     LOG.info(f"Bucket '{bucket}/{prefix}' holds {len(archived)} run(s)")
 
@@ -259,31 +235,22 @@ def main(
         LOG.info("Dry run; stopping before upload")
         return
 
-    failures: list[str] = []
-    uploaded = 0
     for run_id in missing:
         path = local[run_id]
         key = object_key(prefix, path.name)
-        try:
-            check_grib2(path)
-            digest, size = upload(s3, path, bucket, key)
-        except (ValueError, ClientError, BotoCoreError, OSError) as e:
-            LOG.warning(f"Failed to sync '{path.name}': {e}")
-            failures.append(path.name)
-            continue
-
         raw_size = path.stat().st_size
+
+        if not check_grib2(path):
+            raise RuntimeError(f"'{path.name}' is not a GRIB2 file ({raw_size} bytes).")
+
+        digest, size = upload(s3, path, bucket, key)
+
         LOG.info(
             f"Synced '{path.name}' to 's3://{bucket}/{key}' "
             f"({raw_size / 1e6:.1f} -> {size / 1e6:.1f} MB gzipped, {size / raw_size:.0%}; sha256 {digest[:12]}…)"
         )
-        uploaded += 1
 
-    LOG.info(f"Synced {uploaded} run(s), {len(failures)} failure(s)")
-    if failures:
-        # NOAA drops runs after ~4 days, so a persistently broken sync is only
-        # recoverable for a few days — make it visible in the workflow log.
-        raise SystemExit(f"failed to sync: {sorted(failures)}")
+    LOG.info(f"Synced {len(missing)} run(s)")
 
 
 if __name__ == "__main__":
