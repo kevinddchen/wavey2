@@ -123,9 +123,11 @@ def list_archived(s3: S3Client, bucket: str, prefix: str) -> set[str]:
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=f"{prefix}/"):
         for obj in page.get("Contents", []):
+            name = obj["Key"].rsplit("/", 1)[-1]
             try:
-                run_id, _, _ = parse_filename(obj["Key"].rsplit("/", 1)[-1])
+                run_id, _, _ = parse_filename(name)
             except ValueError:
+                LOG.warning(f"Cannot parse S3 key '{obj['Key']}'; skipping.")
                 continue
             archived.add(run_id)
     return archived
@@ -211,8 +213,8 @@ def main(
     for path in sorted(grib_dir.glob("*.grib2")):
         try:
             run_id, _, _ = parse_filename(path.name)
-        except ValueError as e:
-            LOG.warning(f"Skipping {e}")
+        except ValueError:
+            LOG.warning(f"Cannot parse local file '{path}'; skipping.")
             continue
         local[run_id] = path
     if not local:
