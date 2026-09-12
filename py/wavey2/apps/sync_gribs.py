@@ -42,6 +42,8 @@ Quick start
   uv run --group archive -m wavey2.apps.sync_gribs --bucket my-bucket
 """
 
+from __future__ import annotations
+
 import gzip
 import hashlib
 import logging
@@ -100,7 +102,7 @@ def object_key(prefix: str, filename: str) -> str:
     return f"{prefix}/{yyyy}/{mm}/{filename}.gz"
 
 
-def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
+def list_archived(s3: S3Client, bucket: str, prefix: str) -> set[str]:
     """
     List the runs already in the bucket.
 
@@ -129,7 +131,7 @@ def list_archived(s3: "S3Client", bucket: str, prefix: str) -> set[str]:
     return archived
 
 
-def upload(s3: "S3Client", path: Path, bucket: str, key: str) -> tuple[str, int]:
+def upload(s3: S3Client, path: Path, bucket: str, key: str) -> tuple[str, int]:
     """
     Gzip one GRIB2 file and upload it, with checksums for later verification.
 
@@ -217,7 +219,7 @@ def main(
         raise FileNotFoundError(f"no mtr_nwps_CG3_<run_id>.grib2 files found in {grib_dir}")
     LOG.info(f"Found {len(local)} local run(s) in '{grib_dir}'")
 
-    s3: "S3Client" = boto3.client("s3", endpoint_url=endpoint_url)
+    s3: S3Client = boto3.client("s3", endpoint_url=endpoint_url)
     archived = list_archived(s3, bucket, prefix)
     LOG.info(f"Bucket '{bucket}/{prefix}' holds {len(archived)} run(s)")
 
