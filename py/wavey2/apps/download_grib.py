@@ -196,9 +196,11 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
 
     Raises:
         HTTPError: If error encountered during download.
+        RuntimeError: If the response is not a GRIB2 file.
     """
 
-    file_path = dir / os.path.basename(url)
+    filename = os.path.basename(url)
+    file_path = dir / filename
     if file_path.exists():
         LOG.warning(f"'{file_path}' already exists. Skipping download")
         return file_path
@@ -206,10 +208,21 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     r = requests.get(url, stream=True, timeout=_TIMEOUT_SECS)
     r.raise_for_status()
 
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(file_path, "wb") as file:
-        for chunk in r.iter_content(chunk_size=chunk_size):
-            file.write(chunk)
+    dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = dir / f"{filename}.part"
+    try:
+        with open(tmp_path, "wb") as file:
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                file.write(chunk)
+        if not check_grib2(tmp_path):
+            LOG.error(
+                f"'{filename}' is not a GRIB2 file ({tmp_path.stat().st_size} bytes). Contents:\n{_preview(tmp_path)}"
+            )
+            raise RuntimeError(f"'{filename}' is not a GRIB2 file.")
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    tmp_path.replace(file_path)
 
     size_mb = file_path.stat().st_size / 1e6
     LOG.info(f"Downloaded '{url}' to '{file_path}' ({size_mb:.1f} MB)")
@@ -260,17 +273,10 @@ def main(
     downloaded = 0
     for url in urls:
         try:
-            file_path = download_forecast(url, dir=out_dir)
+            download_forecast(url, dir=out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
             continue
-
-        if not check_grib2(file_path):
-            LOG.error(
-                f"'{file_path.name}' is not a GRIB2 file ({file_path.stat().st_size} bytes). "
-                f"Contents:\n{_preview(file_path)}"
-            )
-            raise RuntimeError(f"'{file_path.name}' is not a GRIB2 file.")
 
         downloaded += 1
 
