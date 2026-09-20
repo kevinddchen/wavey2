@@ -8,6 +8,7 @@ dependencies = [
     "pydantic",
     "pygrib",
     "requests",
+    "tenacity",
     "tyro",
 ]
 
