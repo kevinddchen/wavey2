@@ -10,15 +10,13 @@ from bs4 import BeautifulSoup
 
 from wavey2.grib import check_grib2
 from wavey2.logging import setup_logging
+from wavey2.retry import TIMEOUT_SECS, is_rate_limit_page, retry
 
 LOG = logging.getLogger(Path(__file__).stem)
 
 _BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod"
 _MTR = "mtr"
 _CG3 = "CG3"
-
-# Seconds to wait for a connection / between received chunks before giving up.
-_TIMEOUT_SECS = 30
 
 
 def get_most_recent_forecast() -> str:
@@ -127,7 +125,7 @@ def _check_time(date: str, time: str) -> bool:
     """
 
     url = os.path.join(_BASE_URL, date, _MTR, time, _CG3)
-    r = requests.get(url, timeout=_TIMEOUT_SECS)
+    r = requests.get(url, timeout=TIMEOUT_SECS)
     return r.ok
 
 
@@ -170,7 +168,7 @@ def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
         HTTPError: If accessing URL returns error.
     """
 
-    r = requests.get(url, timeout=_TIMEOUT_SECS)
+    r = requests.get(url, timeout=TIMEOUT_SECS)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -205,15 +203,12 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
         LOG.warning(f"'{file_path}' already exists. Skipping download")
         return file_path
 
-    r = requests.get(url, stream=True, timeout=_TIMEOUT_SECS)
-    r.raise_for_status()
-
+    LOG.info(f"Downloading '{url}' to '{file_path}'...")
     dir.mkdir(parents=True, exist_ok=True)
+
     tmp_path = dir / f"{filename}.part"
     try:
-        with open(tmp_path, "wb") as file:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                file.write(chunk)
+        _download_grib2(url, tmp_path, chunk_size=chunk_size)
         if not check_grib2(tmp_path):
             LOG.error(
                 f"'{filename}' is not a GRIB2 file ({tmp_path.stat().st_size} bytes). Contents:\n{_preview(tmp_path)}"
@@ -225,8 +220,42 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     tmp_path.replace(file_path)
 
     size_mb = file_path.stat().st_size / 1e6
-    LOG.info(f"Downloaded '{url}' to '{file_path}' ({size_mb:.1f} MB)")
+    LOG.info(f"... done ({size_mb:.1f} MB)")
     return file_path
+
+
+@retry(is_rate_limit_page)
+def _download_grib2(url: str, path: Path, chunk_size: int | None) -> Path:
+    """
+    Download `url` to `path`, retrying only while NOAA answers with its rate-limit notice.
+
+    That notice arrives under a 200, so `raise_for_status` lets it through; the body of a
+    streamed response cannot be examined without consuming it, so the predicate reads the
+    written file back instead. Anything else that is not a GRIB2 file is left to the
+    caller to report rather than retried: NOAA's published files do not change, so a
+    second attempt would only fetch the same bytes again. A transfer cut short does not
+    reach the predicate at all — NOAA sends a `Content-Length`, so a short read raises.
+
+    Args:
+        url: URL to the GRIB file.
+        path: File to write the response to. Overwritten on each attempt.
+        chunk_size: Download chunk size, in bytes.
+
+    Returns:
+        `path`, which the retry predicate reads to decide whether to try again.
+
+    Raises:
+        HTTPError: If a request returns an error status.
+    """
+
+    r = requests.get(url, stream=True, timeout=TIMEOUT_SECS)
+    r.raise_for_status()
+
+    with open(path, "wb") as file:
+        for chunk in r.iter_content(chunk_size=chunk_size):
+            file.write(chunk)
+
+    return path
 
 
 def _preview(path: Path, preview_bytes: int = 2 * 1024) -> str:
