@@ -52,12 +52,29 @@ jobs:
         run: |
           uv sync --group archive
 
+      # Most of the runs NOAA serves were already downloaded by the previous build, and
+      # fetching all of them again four times a day is what gets this runner's shared IP
+      # rate-limited.
+      - name: Restore GRIB2 cache
+        uses: actions/cache/restore@v6
+        with:
+          path: gribs
+          key: gribs-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: gribs-
+
       - name: Build site
         run: |
           bash fetch.sh
           mkdir _site
           cp index.html favicon.svg _site/
           cp -r css js data _site/
+
+      - name: Save GRIB2 cache
+        if: hashFiles('gribs/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: gribs
+          key: gribs-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
