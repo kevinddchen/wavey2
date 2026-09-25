@@ -12,11 +12,12 @@ cd "$DIR"
 DATA="data"
 GRIBS="gribs"
 
-rm -rf "$DATA" "$GRIBS"
+# Everything in data/ is derived, so it is rebuilt from scratch
+rm -rf "$DATA"
 mkdir -p "$DATA" "$GRIBS"
 
 # Download forecast data
-uv run -m wavey2.apps.download_grib --out-dir "$GRIBS"
+uv run -m wavey2.apps.download_grib --out-dir "$GRIBS" --keep 10
 
 # Convert GRIB2 files to our custom binary format
 for f in "$GRIBS"/*.grib2; do

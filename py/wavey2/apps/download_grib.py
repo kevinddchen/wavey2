@@ -200,7 +200,7 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     filename = os.path.basename(url)
     file_path = dir / filename
     if file_path.exists():
-        LOG.warning(f"'{file_path}' already exists. Skipping download")
+        LOG.info(f"'{file_path}' already downloaded. Skipping.")
         return file_path
 
     LOG.info(f"Downloading '{url}' to '{file_path}'...")
@@ -279,9 +279,49 @@ def _preview(path: Path, preview_bytes: int = 2 * 1024) -> str:
     return f"{text}..." if len(data) > preview_bytes else text
 
 
+def prune_forecasts(dir: Path, keep: int) -> None:
+    """
+    Delete all but the `keep` most recent forecasts in a download directory.
+
+    The directory is reused between builds — the deploy workflow caches it, so most of
+    what NOAA serves has already been downloaded by an earlier build — which means
+    something has to bound it. NOAA keeps about ten runs on the server at a time, so
+    keeping that many tracks its retention window: what gets dropped here is what has
+    already aged off the server.
+
+    Run filenames sort chronologically, so the newest are simply the last by name.
+
+    Args:
+        dir: Directory of .grib2 files.
+        keep: How many forecasts to keep.
+
+    Raises:
+        ValueError: If `keep` is not positive.
+    """
+
+    if keep < 1:
+        raise ValueError(f"Must keep at least one forecast, got {keep}.")
+
+    # A ".part" file is left behind only when a download is killed outright, since the
+    # download itself cleans up after anything it can catch. That used to be wiped with
+    # the rest of the directory; now that the directory outlives the build, an
+    # interrupted download would otherwise be cached forever.
+    for path in dir.glob("*.grib2.part"):
+        LOG.warning(f"Removing leftover partial download '{path.name}'")
+        path.unlink(missing_ok=True)
+
+    stale = sorted(dir.glob("*.grib2"), reverse=True)[keep:]
+    for path in stale:
+        path.unlink(missing_ok=True)
+
+    if stale:
+        LOG.info(f"Pruned {len(stale)} forecast(s) older than the newest {keep}")
+
+
 def main(
     download_all: bool = True,
     out_dir: Path = Path("./gribs/"),
+    keep: int | None = None,
 ) -> None:
     """
     Download Monterey Bay NWPS GRIB2 forecasts.
@@ -289,7 +329,10 @@ def main(
     Args:
         download_all: Download every available forecast. Otherwise, downloads
             just the most recent one.
-        out_dir: Output directory to save the .grib2 files.
+        out_dir: Output directory to save the .grib2 files. Files already there are
+            kept rather than downloaded again.
+        keep: How many forecasts to leave in `out_dir`, newest first. Older ones are
+            deleted once the downloads are done. `None` means do not prune.
     """
 
     if download_all:
@@ -299,18 +342,20 @@ def main(
         urls = [get_most_recent_forecast()]
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
-    downloaded = 0
     for url in urls:
         try:
             download_forecast(url, dir=out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
-            continue
 
-        downloaded += 1
+    if keep is not None:
+        prune_forecasts(out_dir, keep=keep)
 
-    if downloaded == 0:
-        raise RuntimeError(f"Failed to download any of the {len(urls)} available forecast(s).")
+    forecasts = sorted(out_dir.glob("*.grib2"), reverse=True)
+    if not forecasts:
+        raise RuntimeError(f"No forecasts in '{out_dir}'; none of the {len(urls)} available one(s) downloaded.")
+
+    LOG.info(f"{len(forecasts)} forecast(s) in '{out_dir}'; newest is '{forecasts[0].name}'")
 
 
 if __name__ == "__main__":

@@ -52,12 +52,29 @@ jobs:
         run: |
           uv sync --group archive
 
+      # Most of the runs NOAA serves were already downloaded by the previous build, so fetching from cache.
+      # `key` is required but nothing can match it here, so this always falls through to the newest entry.
+      - name: Restore GRIB2 cache
+        uses: actions/cache/restore@v6
+        with:
+          path: gribs
+          key: gribs-
+          restore-keys: gribs-
+
       - name: Build site
         run: |
           bash fetch.sh
           mkdir _site
           cp index.html favicon.svg _site/
           cp -r css js data _site/
+
+      # Keyed by content: a build that downloaded nothing skips the upload
+      - name: Save GRIB2 cache
+        if: hashFiles('gribs/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: gribs
+          key: gribs-${{ hashFiles('gribs/**') }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

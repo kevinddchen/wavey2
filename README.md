@@ -83,6 +83,9 @@ observations, and build the manifest:
 ./fetch.sh
 ```
 
+Downloaded forecasts are kept in `gribs/` and reused; a rerun only fetches what has been published since, and prunes the
+directory back to the ten most recent runs.
+
 ### Run web server
 
 ```bash
