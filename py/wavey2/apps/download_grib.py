@@ -200,7 +200,7 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     filename = os.path.basename(url)
     file_path = dir / filename
     if file_path.exists():
-        LOG.info(f"'{file_path}' already downloaded. Skipping")
+        LOG.info(f"'{file_path}' already downloaded. Skipping.")
         return file_path
 
     LOG.info(f"Downloading '{url}' to '{file_path}'...")
@@ -342,21 +342,20 @@ def main(
         urls = [get_most_recent_forecast()]
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
-    downloaded = 0
     for url in urls:
         try:
             download_forecast(url, dir=out_dir)
         except requests.HTTPError as e:
             LOG.warning(f"Failed to download '{url}': {e}")
-            continue
-
-        downloaded += 1
 
     if keep is not None:
         prune_forecasts(out_dir, keep=keep)
 
-    if downloaded == 0:
-        raise RuntimeError(f"Failed to download any of the {len(urls)} available forecast(s).")
+    forecasts = sorted(out_dir.glob("*.grib2"), reverse=True)
+    if not forecasts:
+        raise RuntimeError(f"No forecasts in '{out_dir}'; none of the {len(urls)} available one(s) downloaded.")
+
+    LOG.info(f"{len(forecasts)} forecast(s) in '{out_dir}'; newest is '{forecasts[0].name}'")
 
 
 if __name__ == "__main__":
