@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Iterator
 
@@ -68,13 +69,10 @@ def _iter_forecast_urls() -> Iterator[str]:
 
     for date in dates:
         LOG.info(f"Looking in '{date}'...")
-        try:
-            times = _list_times(date)
-        except requests.HTTPError:
-            continue  # no forecasts on the given date; try next date
-        for time in times:
-            if _check_time(date=date, time=time):
-                yield _get_url(date=date, time=time)
+        for time in _list_times(date):
+            grib_url = _find_grib(date=date, time=time)
+            if grib_url is not None:
+                yield grib_url
 
 
 def _list_dates() -> list[str]:
@@ -101,56 +99,84 @@ def _list_times(date: str) -> list[str]:
         date: A string like "wr.YYYYMMDD/".
 
     Returns:
-        List of strings like "HH/"; sorted (most recent first).
+        List of strings like "HH/"; sorted (most recent first). Empty if there are no
+        forecasts for Monterey on the given date.
 
     Raises:
-        HTTPError: If no forecasts for Monterey on the given date.
+        HTTPError: If accessing website returns error.
     """
 
-    url = os.path.join(_BASE_URL, date, _MTR)
-    times = _get_hrefs(url, r"\d{2}")  # hrefs look like "HH/"
+    # NOMADS answers a missing path with 403, not 404, so check the date's listing for a
+    # Monterey subdirectory rather than inferring its absence from an error status
+    date_url = os.path.join(_BASE_URL, date)
+    if f"{_MTR}/" not in _get_hrefs(date_url):
+        LOG.warning(f"No '{_MTR}' directory in '{date_url}'. Skipping.")
+        return []
+
+    loc_url = os.path.join(date_url, _MTR)
+    times = _get_hrefs(loc_url, r"\d{2}")  # hrefs look like "HH/"
     return sorted(times, reverse=True)
 
 
-def _check_time(date: str, time: str) -> bool:
+def _find_grib(date: str, time: str) -> str | None:
     """
-    Check if "CG3" forecast is available for the given time.
+    Find the "CG3" GRIB file for the given date and time.
 
     Args:
         date: A string like "wr.YYYYMMDD/".
         time: A string like "HH/".
 
     Returns:
-        True if a "CG3" forecast is available, else False.
+        URL to the "CG3" GRIB file, or None if the run has no "CG3" GRIB file.
+
+    Raises:
+        HTTPError: If accessing website returns error.
+        RuntimeError: If the run has more than one "CG3" GRIB file.
     """
 
-    url = os.path.join(_BASE_URL, date, _MTR, time, _CG3)
-    r = requests.get(url, timeout=TIMEOUT_SECS)
-    return r.ok
+    # NOMADS answers a missing path with 403, not 404, so check the run's listing for a
+    # CG3 subdirectory rather than inferring its absence from an error status
+    time_url = os.path.join(_BASE_URL, date, _MTR, time)
+    if f"{_CG3}/" not in _get_hrefs(time_url):
+        LOG.warning(f"No '{_CG3}' directory in '{time_url}'. Skipping.")
+        return None
+
+    grid_url = os.path.join(time_url, _CG3)
+    filenames = _get_hrefs(grid_url, r".+\.grib2$")  # e.g. "nwps.t12z.cg3.mtr.grib2"
+    if not filenames:
+        LOG.warning(f"No GRIB file in '{grid_url}'. Skipping.")
+        return None
+
+    if len(filenames) > 1:
+        raise RuntimeError(f"'{grid_url}' contains more than one GRIB file.")
+
+    return os.path.join(grid_url, filenames[0])
 
 
-def _get_url(date: str, time: str) -> str:
+def _local_filename(url: str) -> str:
     """
-    Given date and time, get URL to the GRIB file.
+    Name a downloaded GRIB file after the run it belongs to.
+
+    Conforms to NOAA's old filename system, "mtr_nwps_CG3_YYYYMMDD_HH00.grib2". NOAA's
+    current filename (e.g. "nwps.t12z.cg3.mtr.grib2") has no date, so it would collide
+    across days; the run's date and hour are taken from the URL's directories instead.
 
     Args:
-        date: A string like "wr.YYYYMMDD/".
-        time: A string like "HH/".
+        url: URL to the GRIB file, as returned by `_find_grib`.
 
     Returns:
-        URL to the GRIB file.
+        A filename like "mtr_nwps_CG3_YYYYMMDD_HH00.grib2".
+
+    Raises:
+        ValueError: If the URL is not under a "wr.YYYYMMDD/mtr/HH/CG3/" directory.
     """
 
-    date_match = re.search(r"\d{8}", date)
-    assert date_match, f"Unexpected date: {date}"
-    time_match = re.search(r"\d{2}", time)
-    assert time_match, f"Unexpected time: {time}"
+    match = re.search(rf"/wr\.(\d{{8}})/{_MTR}/(\d{{2}})/{_CG3}/", url)
+    if match is None:
+        raise ValueError(f"Unexpected URL: {url}")
 
-    yyyymmdd = date_match.group(0)
-    hh = time_match.group(0)
-    filename = f"{_MTR}_nwps_{_CG3}_{yyyymmdd}_{hh}00.grib2"
-
-    return os.path.join(_BASE_URL, date, _MTR, time, _CG3, filename)
+    yyyymmdd, hh = match.groups()
+    return f"{_MTR}_nwps_{_CG3}_{yyyymmdd}_{hh}00.grib2"
 
 
 def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
@@ -195,9 +221,10 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     Raises:
         HTTPError: If error encountered during download.
         RuntimeError: If the response is not a GRIB2 file.
+        ValueError: If the URL is not under a "wr.YYYYMMDD/mtr/HH/CG3/" directory.
     """
 
-    filename = os.path.basename(url)
+    filename = _local_filename(url)
     file_path = dir / filename
     if file_path.exists():
         LOG.info(f"'{file_path}' already downloaded. Skipping.")
@@ -206,18 +233,18 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     LOG.info(f"Downloading '{url}' to '{file_path}'...")
     dir.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = dir / f"{filename}.part"
-    try:
+    # Download next to the destination, so the final rename is atomic. The temporary file
+    # is deleted on exit unless it was renamed into place; the suffix matches what
+    # `prune_forecasts` sweeps up if the process is killed outright.
+    with tempfile.NamedTemporaryFile(dir=dir, suffix=".grib2.part") as tmp:
+        tmp_path = Path(tmp.name)
         _download_grib2(url, tmp_path, chunk_size=chunk_size)
         if not check_grib2(tmp_path):
             LOG.error(
                 f"'{filename}' is not a GRIB2 file ({tmp_path.stat().st_size} bytes). Contents:\n{_preview(tmp_path)}"
             )
             raise RuntimeError(f"'{filename}' is not a GRIB2 file.")
-    except BaseException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-    tmp_path.replace(file_path)
+        tmp_path.replace(file_path)
 
     size_mb = file_path.stat().st_size / 1e6
     LOG.info(f"... done ({size_mb:.1f} MB)")
@@ -343,17 +370,14 @@ def main(
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
     for url in urls:
-        try:
-            download_forecast(url, dir=out_dir)
-        except requests.HTTPError as e:
-            LOG.warning(f"Failed to download '{url}': {e}")
+        download_forecast(url, dir=out_dir)
 
     if keep is not None:
         prune_forecasts(out_dir, keep=keep)
 
     forecasts = sorted(out_dir.glob("*.grib2"), reverse=True)
     if not forecasts:
-        raise RuntimeError(f"No forecasts in '{out_dir}'; none of the {len(urls)} available one(s) downloaded.")
+        raise RuntimeError(f"No forecasts in '{out_dir}'; none found on NOAA and none cached.")
 
     LOG.info(f"{len(forecasts)} forecast(s) in '{out_dir}'; newest is '{forecasts[0].name}'")
 
