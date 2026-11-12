@@ -10,7 +10,7 @@ const SECONDARY_COLOR = "#ffd700"; // gold — right-click marker + comparison c
 const SITE_BREAKWATER = { name: "Breakwater", lat: 36.6113, lon: -121.891 };
 const SITE_MCABEE = { name: "McAbee", lat: 36.6158, lon: -121.8966 };
 const SITE_LOVERS_POINT = { name: "Lovers Point", lat: 36.6249, lon: -121.9135 };
-const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.9303 };
+const SITE_MONASTERY = { name: "Monastery", lat: 36.5254, lon: -121.936 };
 
 const DIVE_SITES = [SITE_BREAKWATER, SITE_MCABEE, SITE_LOVERS_POINT, SITE_MONASTERY];
 
