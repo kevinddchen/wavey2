@@ -28,7 +28,6 @@ def get_most_recent_forecast() -> str:
 
     Raises:
         HTTPError: If accessing website returns error.
-        RuntimeError: If no forecasts were found.
     """
 
     url = next(_iter_forecast_urls(), None)
@@ -69,8 +68,9 @@ def _iter_forecast_urls() -> Iterator[str]:
     for date in dates:
         LOG.info(f"Looking in '{date}'...")
         for time in _list_times(date):
-            if _check_time(date=date, time=time):
-                yield _get_url(date=date, time=time)
+            grib_url = _find_grib(date=date, time=time)
+            if grib_url is not None:
+                yield grib_url
 
 
 def _list_dates() -> list[str]:
@@ -116,45 +116,38 @@ def _list_times(date: str) -> list[str]:
     return sorted(times, reverse=True)
 
 
-def _check_time(date: str, time: str) -> bool:
+def _find_grib(date: str, time: str) -> str | None:
     """
-    Check if "CG3" forecast is available for the given time.
+    Find the "CG3" GRIB file for the given date and time.
 
     Args:
         date: A string like "wr.YYYYMMDD/".
         time: A string like "HH/".
 
     Returns:
-        True if a "CG3" forecast is available, else False.
+        URL to the "CG3" GRIB file, or None if the run has no "CG3" GRIB file.
+
+    Raises:
+        HTTPError: If accessing website returns error.
     """
 
-    url = os.path.join(_BASE_URL, date, _MTR, time, _CG3)
-    r = requests.get(url, timeout=TIMEOUT_SECS)
-    return r.ok
+    # NOMADS answers a missing path with 403, not 404, so check the run's listing for a
+    # CG3 subdirectory rather than inferring its absence from an error status
+    time_url = os.path.join(_BASE_URL, date, _MTR, time)
+    if f"{_CG3}/" not in _get_hrefs(time_url):
+        LOG.warning(f"No '{_CG3}' directory in '{time_url}'. Skipping.")
+        return None
 
+    grid_url = os.path.join(time_url, _CG3)
+    filenames = _get_hrefs(grid_url, r".+\.grib2$")  # e.g. "mtr_nwps_CG3_YYYYMMDD_HH00.grib2"
+    if not filenames:
+        LOG.warning(f"No GRIB file in '{grid_url}'. Skipping.")
+        return None
 
-def _get_url(date: str, time: str) -> str:
-    """
-    Given date and time, get URL to the GRIB file.
+    if len(filenames) > 1:
+        raise RuntimeError(f"'{grid_url}' contains more than one GRIB file.")
 
-    Args:
-        date: A string like "wr.YYYYMMDD/".
-        time: A string like "HH/".
-
-    Returns:
-        URL to the GRIB file.
-    """
-
-    date_match = re.search(r"\d{8}", date)
-    assert date_match, f"Unexpected date: {date}"
-    time_match = re.search(r"\d{2}", time)
-    assert time_match, f"Unexpected time: {time}"
-
-    yyyymmdd = date_match.group(0)
-    hh = time_match.group(0)
-    filename = f"{_MTR}_nwps_{_CG3}_{yyyymmdd}_{hh}00.grib2"
-
-    return os.path.join(_BASE_URL, date, _MTR, time, _CG3, filename)
+    return os.path.join(grid_url, filenames[0])
 
 
 def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
@@ -347,10 +340,7 @@ def main(
         LOG.info(f"Found most recent forecast: {urls[0]}")
 
     for url in urls:
-        try:
-            download_forecast(url, dir=out_dir)
-        except requests.HTTPError as e:
-            LOG.warning(f"Failed to download '{url}': {e}")
+        download_forecast(url, dir=out_dir)
 
     if keep is not None:
         prune_forecasts(out_dir, keep=keep)
