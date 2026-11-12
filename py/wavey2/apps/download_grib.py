@@ -68,11 +68,7 @@ def _iter_forecast_urls() -> Iterator[str]:
 
     for date in dates:
         LOG.info(f"Looking in '{date}'...")
-        try:
-            times = _list_times(date)
-        except requests.HTTPError:
-            continue  # no forecasts on the given date; try next date
-        for time in times:
+        for time in _list_times(date):
             if _check_time(date=date, time=time):
                 yield _get_url(date=date, time=time)
 
@@ -101,14 +97,22 @@ def _list_times(date: str) -> list[str]:
         date: A string like "wr.YYYYMMDD/".
 
     Returns:
-        List of strings like "HH/"; sorted (most recent first).
+        List of strings like "HH/"; sorted (most recent first). Empty if there are no
+        forecasts for Monterey on the given date.
 
     Raises:
-        HTTPError: If no forecasts for Monterey on the given date.
+        HTTPError: If accessing website returns error.
     """
 
-    url = os.path.join(_BASE_URL, date, _MTR)
-    times = _get_hrefs(url, r"\d{2}")  # hrefs look like "HH/"
+    # NOMADS answers a missing path with 403, not 404, so check the date's listing for a
+    # Monterey subdirectory rather than inferring its absence from an error status
+    date_url = os.path.join(_BASE_URL, date)
+    if f"{_MTR}/" not in _get_hrefs(date_url):
+        LOG.warning(f"No '{_MTR}' directory in '{date_url}'. Skipping.")
+        return []
+
+    loc_url = os.path.join(date_url, _MTR)
+    times = _get_hrefs(loc_url, r"\d{2}")  # hrefs look like "HH/"
     return sorted(times, reverse=True)
 
 
