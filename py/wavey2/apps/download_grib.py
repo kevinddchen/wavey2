@@ -29,6 +29,7 @@ def get_most_recent_forecast() -> str:
 
     Raises:
         HTTPError: If accessing website returns error.
+        RuntimeError: If no forecasts were found.
     """
 
     url = next(_iter_forecast_urls(), None)
@@ -130,6 +131,7 @@ def _find_grib(date: str, time: str) -> str | None:
 
     Raises:
         HTTPError: If accessing website returns error.
+        RuntimeError: If the run has more than one "CG3" GRIB file.
     """
 
     # NOMADS answers a missing path with 403, not 404, so check the run's listing for a
@@ -164,10 +166,14 @@ def _local_filename(url: str) -> str:
 
     Returns:
         A filename like "mtr_nwps_CG3_YYYYMMDD_HH00.grib2".
+
+    Raises:
+        ValueError: If the URL is not under a "wr.YYYYMMDD/mtr/HH/CG3/" directory.
     """
 
     match = re.search(rf"/wr\.(\d{{8}})/{_MTR}/(\d{{2}})/{_CG3}/", url)
-    assert match, f"Unexpected URL: {url}"
+    if match is None:
+        raise ValueError(f"Unexpected URL: {url}")
 
     yyyymmdd, hh = match.groups()
     return f"{_MTR}_nwps_{_CG3}_{yyyymmdd}_{hh}00.grib2"
@@ -215,6 +221,7 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     Raises:
         HTTPError: If error encountered during download.
         RuntimeError: If the response is not a GRIB2 file.
+        ValueError: If the URL is not under a "wr.YYYYMMDD/mtr/HH/CG3/" directory.
     """
 
     filename = _local_filename(url)
@@ -370,7 +377,7 @@ def main(
 
     forecasts = sorted(out_dir.glob("*.grib2"), reverse=True)
     if not forecasts:
-        raise RuntimeError(f"No forecasts in '{out_dir}'; none of the {len(urls)} available one(s) downloaded.")
+        raise RuntimeError(f"No forecasts in '{out_dir}'; none found on NOAA and none cached.")
 
     LOG.info(f"{len(forecasts)} forecast(s) in '{out_dir}'; newest is '{forecasts[0].name}'")
 
