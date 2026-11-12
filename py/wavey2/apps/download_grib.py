@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Iterator
 
@@ -225,18 +226,18 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
     LOG.info(f"Downloading '{url}' to '{file_path}'...")
     dir.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = dir / f"{filename}.part"
-    try:
+    # Download next to the destination, so the final rename is atomic. The temporary file
+    # is deleted on exit unless it was renamed into place; the suffix matches what
+    # `prune_forecasts` sweeps up if the process is killed outright.
+    with tempfile.NamedTemporaryFile(dir=dir, suffix=".grib2.part") as tmp:
+        tmp_path = Path(tmp.name)
         _download_grib2(url, tmp_path, chunk_size=chunk_size)
         if not check_grib2(tmp_path):
             LOG.error(
                 f"'{filename}' is not a GRIB2 file ({tmp_path.stat().st_size} bytes). Contents:\n{_preview(tmp_path)}"
             )
             raise RuntimeError(f"'{filename}' is not a GRIB2 file.")
-    except BaseException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-    tmp_path.replace(file_path)
+        tmp_path.replace(file_path)
 
     size_mb = file_path.stat().st_size / 1e6
     LOG.info(f"... done ({size_mb:.1f} MB)")
