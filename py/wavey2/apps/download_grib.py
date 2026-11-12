@@ -139,7 +139,7 @@ def _find_grib(date: str, time: str) -> str | None:
         return None
 
     grid_url = os.path.join(time_url, _CG3)
-    filenames = _get_hrefs(grid_url, r".+\.grib2$")  # e.g. "mtr_nwps_CG3_YYYYMMDD_HH00.grib2"
+    filenames = _get_hrefs(grid_url, r".+\.grib2$")  # e.g. "nwps.t12z.cg3.mtr.grib2"
     if not filenames:
         LOG.warning(f"No GRIB file in '{grid_url}'. Skipping.")
         return None
@@ -148,6 +148,28 @@ def _find_grib(date: str, time: str) -> str | None:
         raise RuntimeError(f"'{grid_url}' contains more than one GRIB file.")
 
     return os.path.join(grid_url, filenames[0])
+
+
+def _local_filename(url: str) -> str:
+    """
+    Name a downloaded GRIB file after the run it belongs to.
+
+    Conforms to NOAA's old filename system, "mtr_nwps_CG3_YYYYMMDD_HH00.grib2". NOAA's
+    current filename (e.g. "nwps.t12z.cg3.mtr.grib2") has no date, so it would collide
+    across days; the run's date and hour are taken from the URL's directories instead.
+
+    Args:
+        url: URL to the GRIB file, as returned by `_find_grib`.
+
+    Returns:
+        A filename like "mtr_nwps_CG3_YYYYMMDD_HH00.grib2".
+    """
+
+    match = re.search(rf"/wr\.(\d{{8}})/{_MTR}/(\d{{2}})/{_CG3}/", url)
+    assert match, f"Unexpected URL: {url}"
+
+    yyyymmdd, hh = match.groups()
+    return f"{_MTR}_nwps_{_CG3}_{yyyymmdd}_{hh}00.grib2"
 
 
 def _get_hrefs(url: str, regex: str | None = None) -> list[str]:
@@ -194,7 +216,7 @@ def download_forecast(url: str, dir: Path, chunk_size: int | None = 8 * 1024) ->
         RuntimeError: If the response is not a GRIB2 file.
     """
 
-    filename = os.path.basename(url)
+    filename = _local_filename(url)
     file_path = dir / filename
     if file_path.exists():
         LOG.info(f"'{file_path}' already downloaded. Skipping.")
