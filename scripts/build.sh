@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Build data/ from the forecasts in gribs/ (see `scripts/fetch.sh`), plus fresh buoy observations.
 set -euo pipefail
 shopt -s nullglob  # an empty gribs/ glob expands to nothing, not a literal path
 
@@ -6,18 +7,15 @@ shopt -s nullglob  # an empty gribs/ glob expands to nothing, not a literal path
 # environment deliberately built without it (`uv sync --no-dev`). Runtime deps are still installed.
 export UV_NO_DEV=1
 
-DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-cd "$DIR"
+ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )
+cd "$ROOT"
 
 DATA="data"
 GRIBS="gribs"
 
 # Everything in data/ is derived, so it is rebuilt from scratch
 rm -rf "$DATA"
-mkdir -p "$DATA" "$GRIBS"
-
-# Download forecast data
-uv run -m wavey2.apps.download_grib --out-dir "$GRIBS" --keep 10
+mkdir -p "$DATA"
 
 # Convert GRIB2 files to our custom binary format
 for f in "$GRIBS"/*.grib2; do

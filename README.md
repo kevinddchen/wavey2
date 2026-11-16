@@ -74,13 +74,13 @@ uv venv
 uv sync --no-dev
 ```
 
-### Fetch all data (one step)
+### Fetch and build all data
 
-`fetch.sh` runs the whole pipeline below — download forecasts, convert them, download buoy
-observations, and build the manifest:
+Two scripts run the whole pipeline below. `scripts/fetch.sh` downloads forecasts into `gribs/`; `scripts/build.sh`
+converts them, downloads buoy observations, and builds the manifest in `data/`:
 
 ```bash
-./fetch.sh
+scripts/fetch.sh && scripts/build.sh
 ```
 
 Downloaded forecasts are kept in `gribs/` and reused; a rerun only fetches what has been published since, and prunes the
@@ -98,7 +98,7 @@ A plain file server is required because the page uses `fetch()` to load `data/in
 
 The heatmap is clipped to the water so it never covers the land, using a
 coastline traced from [OpenStreetMap](https://www.openstreetmap.org/copyright) and baked into `js/coastline.js`.
-That file is committed and `fetch.sh` does not rebuild it — coastlines don't move. Re-run this only if the
+That file is committed and `scripts/build.sh` does not rebuild it — coastlines don't move. Re-run this only if the
 forecast grid's bounds change:
 
 ```bash
@@ -111,7 +111,7 @@ uv run --no-dev -m wavey2.apps.build_coastline  # queries the Overpass API, rewr
 2. Go to **Settings → Pages** and set the source to **GitHub Actions**.
 3. The site will be available at `https://<username>.github.io/<repo>/`.
 
-The `.github/workflows/deploy.yml` workflow handles the build and deploy. It runs automatically four times a day to refresh the forecast data, and can also be triggered manually from the Actions tab.
+The `.github/workflows/deploy.yml` workflow handles the build and deploy. It runs automatically every hour to pick up new forecast runs, skipping the build and deploy when NOAA has published nothing new, and can also be triggered manually from the Actions tab.
 
 ## Developer tools
 
