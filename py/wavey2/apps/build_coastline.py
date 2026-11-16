@@ -26,7 +26,7 @@ underneath is still spaced linearly in latitude, but it has no sharp features to
 misplace; the clip is the edge the eye lines up against the map.
 
 Coastlines don't move, so this is a one-off: `js/coastline.js` is committed and
-`fetch.sh` does not run this. Re-run it only if the forecast grid's bounds change
+`scripts/build.sh` does not run this. Re-run it only if the forecast grid's bounds change
 -- the generated file records the bounds it was built for, but nothing checks them
 at runtime, so a stale path would simply be clipped against the wrong rectangle.
 

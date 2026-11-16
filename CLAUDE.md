@@ -34,7 +34,8 @@ Run locally — `data/` and `gribs/` are gitignored, so fetch data first (takes 
 downloads every forecast run still on the NOAA server):
 
 ```bash
-./fetch.sh                                          # download + convert + build manifest
+scripts/fetch.sh                                    # download forecasts into gribs/
+scripts/build.sh                                    # convert + download buoys + build manifest in data/
 uv run python -m http.server 8000                   # a real server is required; fetch() fails on file://
 ```
 
@@ -46,7 +47,7 @@ become the flags (`out_dir` → `--out-dir`), a positional-only parameter (one b
 becomes a positional argument instead, the docstring's summary and `Args:` entries become the help
 text, and defaults are shown automatically. There are no aliases or `tyro.conf.arg` overrides, so
 the signature _is_ the CLI: renaming a parameter, moving the `/`, or flipping a `bool` default all
-change how the app is invoked — check `fetch.sh`, README.md, and `deploy.yml` when you do.
+change how the app is invoked — check `scripts/`, README.md, and `deploy.yml` when you do.
 
 ## Data pipeline
 
@@ -108,6 +109,7 @@ hatchling scrapes it back out of that file (`[tool.hatch.version]`), so the two 
 one file needs bumping. That regex matches the literal `const VERSION = "..."` line, so keep the
 line's shape. The deploy workflow checks out the **latest git tag**, not `main`, so merged changes
 do not go live until a `vX.Y.Z` tag exists: bump `js/version.js` in a commit titled `vX.Y.Z`, then
-tag it. Deploys also run on a 4×/day cron to refresh forecast data.
+tag it. Deploys also run on an hourly cron to refresh forecast data; a scheduled run that downloads no new
+GRIB file stops before building, so it neither redeploys nor refreshes buoy data.
 
 Commit titles follow `type: Title (#PR)` (`feat`, `fix`, `perf`, `refactor`, `chore`).
