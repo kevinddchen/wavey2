@@ -90,14 +90,6 @@ jobs:
           cp index.html favicon.svg _site/
           cp -r css js data _site/
 
-      # Keyed by content: a build that downloaded nothing skips the upload
-      - name: Save GRIB2 cache
-        if: steps.download.outputs.changed == 'true' && hashFiles('gribs/**') != ''
-        uses: actions/cache/save@v6
-        with:
-          path: gribs
-          key: gribs-${{ hashFiles('gribs/**') }}
-
       - name: Setup Pages
         if: steps.download.outputs.changed == 'true'
         uses: actions/configure-pages@v6
@@ -107,6 +99,13 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: _site/
+
+      - name: Save GRIB2 cache
+        if: steps.download.outputs.changed == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: gribs
+          key: gribs-${{ hashFiles('gribs/**') }}
 
       - name: Configure AWS credentials
         if: steps.download.outputs.changed == 'true' && vars.AWS_ARCHIVE_BUCKET != ''
