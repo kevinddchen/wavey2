@@ -107,7 +107,7 @@ class Loaded(NamedTuple):
 
 def list_variables(path: Path) -> None:
     """Log every distinct variable in a GRIB2 file, for picking the `*_NAME` constants above."""
-    grbs = pygrib.open(path)  # ty: ignore[unresolved-attribute]
+    grbs = pygrib.open(path)  # ty: ignore[missing-attribute]
     seen: dict[tuple[Any, ...], dict[str, Any]] = {}
     for grb in grbs:
         key = (grb.shortName, grb.name, grb.typeOfLevel, grb.level)
@@ -144,7 +144,7 @@ def load_all_messages(path: Path) -> Loaded:
     lats: npt.NDArray[Any] | None = None
     lons: npt.NDArray[Any] | None = None
 
-    grbs = pygrib.open(path)  # ty: ignore[unresolved-attribute]
+    grbs = pygrib.open(path)  # ty: ignore[missing-attribute]
     for grb in grbs:
         sn = grb.shortName
         if sn not in targets:

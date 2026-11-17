@@ -168,7 +168,7 @@ def upload(s3: S3Client, path: Path, bucket: str, key: str) -> tuple[str, int]:
         tmp.seek(0)
         # `NamedTemporaryFile` proxies `readinto` to the real file at runtime, but
         # typeshed only exposes it through `__getattr__`, which ty won't match.
-        digest = hashlib.file_digest(tmp, "sha256").hexdigest()  # ty: ignore[invalid-argument-type]
+        digest = hashlib.file_digest(tmp, "sha256").hexdigest()  # ty: ignore[no-matching-overload]
 
         tmp.seek(0)
         s3.put_object(
