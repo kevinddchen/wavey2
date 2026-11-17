@@ -14,9 +14,7 @@ class _UTCFormatter(logging.Formatter):
     the default is `time.localtime`.
     """
 
-    @staticmethod
-    def converter(timestamp: float | None = None) -> time.struct_time:
-        return time.gmtime(timestamp)
+    converter = time.gmtime
 
 
 def setup_logging(level: int | str | None = logging.INFO) -> None:
